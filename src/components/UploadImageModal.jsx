@@ -110,7 +110,7 @@ const UploadImageModal = ({
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50">
       <div className="bg-white rounded-lg shadow-lg p-6 w-96 relative">
-        <h2 className="text-2xl font-bold text-green-600 mb-6 text-center">
+        <h2 className="text-2xl font-bold text-[#9d174d] mb-6 text-center">
           Upload Image
         </h2>
 
@@ -164,8 +164,8 @@ const UploadImageModal = ({
               disabled={isUploading} // חסום כפתור שמירה אם יש לודר
               className={`px-4 py-2 rounded ${
                 isUploading
-                  ? "bg-green-300 cursor-not-allowed"
-                  : "bg-green-500 hover:bg-green-600 text-white font-semibold"
+                  ? "bg-[#9d174d]-300 cursor-not-allowed"
+                  : "bg-[#9d174d] hover:bg-[#831843] text-white font-semibold"
               }`}
             >
               {isUploading ? (

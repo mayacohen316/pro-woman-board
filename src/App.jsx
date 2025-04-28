@@ -628,33 +628,30 @@ const App = () => {
         )}
       </main>
 
-      <div className="fixed bottom-4 left-1/2 transform -translate-x-1/2 flex gap-4">
+      <div className="fixed bottom-4 left-1/2 transform -translate-x-1/2 flex gap-2 sm:gap-4">
         <button
           onClick={() => setShowAddEntityModal(true)}
-          className="bg-[#750202] text-white font-semibold px-6 py-3 rounded-2xl shadow-lg hover:bg-[#5c0101] transition-all flex items-center gap-2"
+          className="bg-[#9d174d] hover:bg-[#831843] text-white px-2 py-2 sm:px-4 sm:py-2 rounded text-xl sm:text-base shadow-md hover:shadow-lg transition"
         >
-          ➕ Add Entity
+          ➕<span className="hidden sm:inline"> Add Entity</span>
         </button>
-
         <button
           onClick={() => setShowTextBubbleModal(true)}
-          className="bg-[#750202] text-white font-semibold px-6 py-3 rounded-2xl shadow-lg hover:bg-[#5c0101] transition-all flex items-center gap-2"
+          className="bg-[#9d174d] hover:bg-[#831843] text-white px-2 py-2 sm:px-4 sm:py-2 rounded text-xl sm:text-base shadow-md hover:shadow-lg transition"
         >
-          📝 Write Something Nice
+          📝<span className="hidden sm:inline"> Write something nice</span>
         </button>
-
         <button
           onClick={() => setShowImageModal(true)}
-          className="bg-[#750202] text-white font-semibold px-6 py-3 rounded-2xl shadow-lg hover:bg-[#5c0101] transition-all flex items-center gap-2"
+          className="bg-[#9d174d] hover:bg-[#831843] text-white px-2 py-2 sm:px-4 sm:py-2 rounded text-xl sm:text-base shadow-md hover:shadow-lg transition"
         >
-          📷 Add Image
+          📷<span className="hidden sm:inline"> Add Image</span>
         </button>
-
         <button
           onClick={() => setShowEmojiModal(true)}
-          className="bg-[#750202] text-white font-semibold px-6 py-3 rounded-2xl shadow-lg hover:bg-[#5c0101] transition-all flex items-center gap-2"
+          className="bg-[#9d174d] hover:bg-[#831843] text-white px-2 py-2 sm:px-4 sm:py-2 rounded text-xl sm:text-base shadow-md hover:shadow-lg transition"
         >
-          😀 Add Emoji
+          😀<span className="hidden sm:inline"> Add Emoji</span>
         </button>
       </div>
 

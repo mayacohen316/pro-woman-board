@@ -22,7 +22,10 @@ const EntityNode = ({ data }) => {
       </button>
 
       {/* כותרת */}
-      <div className="font-bold text-purple-700 text-xl mb-3 text-center">
+      <div
+        className="font-bold text-xl mb-3 text-center"
+        style={{ color: "#9d174d" }}
+      >
         {data.label}
       </div>
 

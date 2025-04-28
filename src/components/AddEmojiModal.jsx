@@ -49,7 +49,7 @@ const AddEmojiModal = ({ onClose, onSave, entities }) => {
   return (
     <div className="fixed inset-0 bg-black bg-opacity-40 flex justify-center items-center z-50">
       <div className="bg-white p-6 rounded-lg shadow-lg w-96 relative">
-        <h2 className="text-2xl font-bold text-yellow-500 mb-6 text-center">
+        <h2 className="text-2xl font-bold text-[#9d174d] mb-6 text-center">
           Add Emoji
         </h2>
 
@@ -95,7 +95,7 @@ const AddEmojiModal = ({ onClose, onSave, entities }) => {
             </button>
             <button
               type="submit"
-              className="px-4 py-2 rounded bg-yellow-400 hover:bg-yellow-500 text-white font-semibold"
+              className="px-4 py-2 rounded bg-[#9d174d] hover:bg-[#831843] text-white font-semibold"
             >
               Save
             </button>

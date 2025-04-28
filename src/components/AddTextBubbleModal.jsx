@@ -33,7 +33,7 @@ const AddTextBubbleModal = ({ onClose, onSave, entities, isLoading }) => {
   return (
     <div className="fixed inset-0 bg-black bg-opacity-40 flex justify-center items-center z-50">
       <div className="bg-white p-6 rounded-lg shadow-lg w-96 relative">
-        <h2 className="text-2xl font-bold text-pink-500 mb-6 text-center">
+        <h2 className="text-2xl font-bold text-[#9d174d] mb-6 text-center">
           Add Text Bubble
         </h2>
 
@@ -74,8 +74,8 @@ const AddTextBubbleModal = ({ onClose, onSave, entities, isLoading }) => {
               disabled={isLoading} // החסמת כפתור אם יש לודר
               className={`px-4 py-2 rounded ${
                 isLoading
-                  ? "bg-pink-300 cursor-not-allowed"
-                  : "bg-pink-500 hover:bg-pink-600 text-white font-semibold"
+                  ? "bg-[#9d174d]-300 cursor-not-allowed"
+                  : "bg-[#9d174d] hover:bg-[#831843] text-white font-semibold"
               }`}
             >
               {isLoading ? (

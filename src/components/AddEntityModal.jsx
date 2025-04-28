@@ -30,7 +30,7 @@ const AddEntityModal = ({ onClose, onSave, isSaving }) => {
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
       <div className="bg-white p-6 rounded shadow-lg w-96">
-        <h2 className="text-xl font-bold mb-4 text-center">
+        <h2 className="text-2xl font-bold text-[#9d174d] mb-6 text-center">
           New Prowoman Participant
         </h2>
 
@@ -77,19 +77,19 @@ const AddEntityModal = ({ onClose, onSave, isSaving }) => {
               onClick={onClose}
               className="text-gray-600 hover:text-gray-800"
             >
-              ביטול
+              cancel
             </button>
             <button
               type="submit"
               className={`${
-                isSaving ? "bg-gray-300 cursor-not-allowed" : "bg-purple-600"
-              } hover:bg-purple-700 text-white px-4 py-2 rounded`}
+                isSaving ? "bg-gray-300 cursor-not-allowed" : "bg-[#9d174d]"
+              }  hover:bg-[#831843] text-white px-4 py-2 rounded`}
               disabled={isSaving} // אם יש לודר, לא לאפשר שמירה
             >
               {isSaving ? (
                 <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
               ) : (
-                "הוספה"
+                "save"
               )}
             </button>
           </div>

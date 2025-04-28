@@ -240,7 +240,7 @@ const SimpleFlow = ({
           ...edge,
           type: "default",
           markerEnd: { type: "arrowclosed" },
-          style: { stroke: "#8b5cf6", strokeWidth: 2 },
+          style: { stroke: "#9d174d", strokeWidth: 2 },
         }))}
         nodeTypes={nodeTypes}
         onNodesChange={onNodesChange}
