@@ -27,23 +27,31 @@ const App = () => {
   const [newlyAddedEdges, setNewlyAddedEdges] = useState([]);
   const [nodes, setNodes] = useState([]);
   const [edges, setEdges] = useState([]);
+  const [isSaving, setIsSaving] = useState(false); // הגדרת הסטייט של isSaving
 
+  const fetchData = async () => {
+    setIsLoading(true);
+    const [
+      { data: entityData },
+      { data: bubbleData },
+      { data: imageData },
+      { data: emojiData },
+    ] = await Promise.all([
+      supabase.from("entities").select("*"),
+      supabase.from("text_bubbles").select("*"),
+      supabase.from("images").select("*"),
+      supabase.from("emojis").select("*"),
+    ]);
+
+    setEntities(entityData || []);
+    setTextBubbles(bubbleData || []);
+    setImages(imageData || []);
+    setEmojis(emojiData || []);
+    setIsLoading(false);
+  };
+
+  // קריאה ראשונית
   useEffect(() => {
-    const fetchData = async () => {
-      const { data: entityData } = await supabase.from("entities").select("*");
-      const { data: bubbleData } = await supabase
-        .from("text_bubbles")
-        .select("*");
-      const { data: imageData } = await supabase.from("images").select("*");
-      const { data: emojiData } = await supabase.from("emojis").select("*");
-
-      setEntities(entityData || []);
-      setTextBubbles(bubbleData || []);
-      setImages(imageData || []);
-      setEmojis(emojiData || []);
-      setIsLoading(false);
-    };
-
     fetchData();
   }, []);
 
@@ -255,15 +263,16 @@ const App = () => {
   };
 
   const handleSaveImage = async (newImageData) => {
+    setIsSaving(true); // הדלקת הלודר
+
     const newImage = {
       url: newImageData.url,
       targetId: newImageData.targetId,
-      x: Math.floor(Math.random() * 500),
-      y: Math.floor(Math.random() * 500),
+      x: Math.floor(Math.random() * 800),
+      y: Math.floor(Math.random() * 600),
     };
 
     try {
-      // הכנסה ל-DB
       const { data, error } = await supabase
         .from("images")
         .insert([newImage])
@@ -276,21 +285,20 @@ const App = () => {
 
       console.log("✅ Image added:", data[0]);
 
-      // עדכון סטייט התמונות ישירות (בלי לבצע fetch מחדש)
-      setImages((prevImages) => [...prevImages, data[0]]); // הוספת התמונה החדשה ישירות לסטייט
+      // הוספת התמונה לסטייט
+      setImages((prevImages) => [...prevImages, data[0]]);
 
-      // עדכון הסטייט של nodes והקשרים
-      updateNodesAndEdges(
-        entities,
-        textBubbles,
-        [...images, data[0]], // עדכון עם התמונות החדשות
-        emojis
-      );
+      // המתנה לפני ריפרוש הנתונים
+      setTimeout(() => {
+        // ריפרוש כל הנתונים
+        fetchData(); // מחדש את כל ה-entities, images, bubbles וה-emojis
+      }, 2000); // המתן 2 שניות לפני הריפרוש
+
+      setShowImageModal(false); // סגירת המודל אחרי השמירה
     } catch (err) {
       console.error("❌ Error saving image:", err);
     } finally {
-      // כיבוי הלודר
-      setShowImageModal(false);
+      setIsSaving(false); // כיבוי הלודר
     }
   };
 
@@ -349,60 +357,45 @@ const App = () => {
   };
 
   const handleSaveEntity = async (newEntityData) => {
-    const newEntity = {
-      name: newEntityData.name,
-      address: newEntityData.address,
-      contribution: newEntityData.contribution,
-      linkedin: newEntityData.linkedin,
-      x: Math.floor(Math.random() * 800),
-      y: Math.floor(Math.random() * 600),
-    };
+    setIsSaving(true); // הדלקת הלודר
 
-    const { data, error } = await supabase
-      .from("entities")
-      .insert([newEntity])
-      .select();
+    try {
+      // שמירה ל-DB
+      const { data, error } = await supabase
+        .from("entities")
+        .insert([newEntityData])
+        .select();
 
-    if (error) {
-      console.error("❌ Error inserting entity:", error.message || error);
-      return;
-    }
-
-    console.log("✅ Entity added:", data[0]);
-
-    const insertedEntity = data[0];
-
-    // עדכון סטייט ה-entities
-    setEntities((prev) => [...prev, insertedEntity]);
-
-    // עדכון הסטייט של nodes
-    setNodes((prevNodes) => [
-      ...prevNodes,
-      {
-        id: insertedEntity.id,
-        type: "entity", // סוג האובייקט החדש
-        position: { x: insertedEntity.x, y: insertedEntity.y },
-        data: { label: insertedEntity.name, address: insertedEntity.address },
-      },
-    ]);
-
-    // יצירת edge חדש עבור ה-entity
-    const newEdge = {
-      id: `edge-${insertedEntity.id}`,
-      source: insertedEntity.id,
-      target: insertedEntity.targetId, // targetId חייב להיות מוגדר
-    };
-
-    // עדכון הסטייט של edges
-    setEdges((prevEdges) => [...prevEdges, newEdge]);
-
-    // להפעיל את הפוקנציה fitView אחרי שמירת ה-node החדש
-    setTimeout(() => {
-      const reactFlow = reactFlowInstance.current;
-      if (reactFlow) {
-        reactFlow.fitView({ padding: 0.2 });
+      if (error) {
+        console.error("❌ Error inserting entity:", error.message || error);
+        return;
       }
-    }, 300); // המתן 300ms ואז תעדכן את ה-view
+
+      console.log("✅ Entity added:", data[0]);
+
+      // הוספת ה-entity לסטייט
+      setEntities((prev) => [...prev, data[0]]);
+      setNodes((prev) => [
+        ...prev,
+        {
+          id: data[0].id,
+          type: "entity",
+          position: { x: data[0].x, y: data[0].y },
+          data: { label: data[0].name, address: data[0].address },
+        },
+      ]);
+
+      // המתנה לפני ריפרוש הנתונים
+      setTimeout(() => {
+        // ריפרוש כל הנתונים
+        fetchData(); // מחדש את כל ה-entities, images, bubbles וה-emojis
+      }, 2000); // המתן 2 שניות לפני הריפרוש
+    } catch (err) {
+      console.error("❌ Error saving entity:", err);
+    } finally {
+      setIsSaving(false); // כיבוי הלודר
+      setShowAddEntityModal(false); // סגירת המודל
+    }
   };
 
   const handleConfirmDelete = async () => {
@@ -612,7 +605,9 @@ const App = () => {
   return (
     <div className="flex flex-col h-screen">
       <header className="bg-white shadow p-4 flex justify-center items-center">
-        <h1 className="text-2xl font-bold text-purple-600">Pro Woman</h1>
+        <h1 className="text-3xl font-bold text-[#800020] tracking-wide">
+          ProWoman
+        </h1>
       </header>
 
       <main className="flex-1 overflow-hidden">
@@ -636,25 +631,28 @@ const App = () => {
       <div className="fixed bottom-4 left-1/2 transform -translate-x-1/2 flex gap-4">
         <button
           onClick={() => setShowAddEntityModal(true)}
-          className="bg-purple-600 text-white px-4 py-2 rounded"
+          className="bg-[#750202] text-white font-semibold px-6 py-3 rounded-2xl shadow-lg hover:bg-[#5c0101] transition-all flex items-center gap-2"
         >
-          ➕
+          ➕ Add Entity
         </button>
+
         <button
           onClick={() => setShowTextBubbleModal(true)}
-          className="bg-pink-500 text-white px-4 py-2 rounded"
+          className="bg-[#750202] text-white font-semibold px-6 py-3 rounded-2xl shadow-lg hover:bg-[#5c0101] transition-all flex items-center gap-2"
         >
-          📝 Add Bubble
+          📝 Write Something Nice
         </button>
+
         <button
           onClick={() => setShowImageModal(true)}
-          className="bg-green-500 text-white px-4 py-2 rounded"
+          className="bg-[#750202] text-white font-semibold px-6 py-3 rounded-2xl shadow-lg hover:bg-[#5c0101] transition-all flex items-center gap-2"
         >
           📷 Add Image
         </button>
+
         <button
           onClick={() => setShowEmojiModal(true)}
-          className="bg-yellow-500 text-white px-4 py-2 rounded"
+          className="bg-[#750202] text-white font-semibold px-6 py-3 rounded-2xl shadow-lg hover:bg-[#5c0101] transition-all flex items-center gap-2"
         >
           😀 Add Emoji
         </button>
@@ -677,12 +675,11 @@ const App = () => {
       {showImageModal && (
         <UploadImageModal
           onClose={() => setShowImageModal(false)}
-          onSave={(newData) => handleSaveImage(newData)}
+          onSave={handleSaveImage}
+          setIsSaving={setIsSaving}
+          isSaving={isSaving}
+          setShowImageModal={setShowImageModal} // הוספתי את setShowImageModal כפרופס
           entities={entities}
-          setImages={setImages}
-          textBubbles={textBubbles}
-          emojis={emojis} // העבר את emojis כאן
-          updateNodesAndEdges={updateNodesAndEdges}
         />
       )}
 

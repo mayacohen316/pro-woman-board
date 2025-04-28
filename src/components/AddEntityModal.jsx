@@ -1,22 +1,12 @@
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 
-const AddEntityModal = ({ onClose, onSave }) => {
+const AddEntityModal = ({ onClose, onSave, isSaving }) => {
   const [formData, setFormData] = useState({
     name: "",
     address: "",
     contribution: "",
     linkedin: "",
   });
-
-  useEffect(() => {
-    const handleKeyDown = (e) => {
-      if (e.key === "Escape") {
-        onClose();
-      }
-    };
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [onClose]);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -25,14 +15,6 @@ const AddEntityModal = ({ onClose, onSave }) => {
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    if (
-      !formData.name.trim() ||
-      !formData.address.trim() ||
-      !formData.contribution.trim()
-    ) {
-      alert("Please fill in all required fields.");
-      return;
-    }
 
     const newEntity = {
       ...formData,
@@ -40,67 +22,75 @@ const AddEntityModal = ({ onClose, onSave }) => {
       y: Math.random() * 600,
     };
 
+    // שולח ל-App שמירה ואז יחזור עם הנתונים ויעדכן את הגריד
     onSave(newEntity);
-    onClose();
+    onClose(); // סוגר מודאל
   };
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-40 flex justify-center items-center z-50">
-      <div className="bg-white p-6 rounded-lg shadow-lg w-96 relative">
-        <h2 className="text-2xl font-bold text-purple-600 mb-6 text-center">
-          Add New Entity
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+      <div className="bg-white p-6 rounded shadow-lg w-96">
+        <h2 className="text-xl font-bold mb-4 text-center">
+          New Prowoman Participant
         </h2>
 
-        <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+        <form onSubmit={handleSubmit} className="flex flex-col gap-3">
           <input
             type="text"
             name="name"
-            placeholder="Name"
+            placeholder="שם"
             value={formData.name}
             onChange={handleChange}
-            className="border border-gray-300 rounded px-3 py-2 focus:ring-2 focus:ring-purple-400"
+            className="border p-2 rounded"
             required
           />
           <input
             type="text"
             name="address"
-            placeholder="City"
+            placeholder="עיר"
             value={formData.address}
             onChange={handleChange}
-            className="border border-gray-300 rounded px-3 py-2 focus:ring-2 focus:ring-purple-400"
+            className="border p-2 rounded"
             required
           />
           <input
             type="text"
             name="contribution"
-            placeholder="Unique Contribution"
+            placeholder="תרומה ייחודית"
             value={formData.contribution}
             onChange={handleChange}
-            className="border border-gray-300 rounded px-3 py-2 focus:ring-2 focus:ring-purple-400"
+            className="border p-2 rounded"
             required
           />
           <input
             type="url"
             name="linkedin"
-            placeholder="LinkedIn URL (Optional)"
+            placeholder="קישור ללינקדאין"
             value={formData.linkedin}
             onChange={handleChange}
-            className="border border-gray-300 rounded px-3 py-2 focus:ring-2 focus:ring-purple-400"
+            className="border p-2 rounded"
           />
 
-          <div className="flex justify-between mt-6">
+          <div className="flex justify-end gap-4 mt-4">
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 rounded bg-gray-300 hover:bg-gray-400"
+              className="text-gray-600 hover:text-gray-800"
             >
-              Cancel
+              ביטול
             </button>
             <button
               type="submit"
-              className="px-4 py-2 rounded bg-purple-600 hover:bg-purple-700 text-white font-semibold"
+              className={`${
+                isSaving ? "bg-gray-300 cursor-not-allowed" : "bg-purple-600"
+              } hover:bg-purple-700 text-white px-4 py-2 rounded`}
+              disabled={isSaving} // אם יש לודר, לא לאפשר שמירה
             >
-              Save
+              {isSaving ? (
+                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+              ) : (
+                "הוספה"
+              )}
             </button>
           </div>
         </form>

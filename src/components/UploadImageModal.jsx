@@ -1,21 +1,18 @@
-import React, { useState, useEffect } from "react";
-import { supabase } from "../supabaseClient";
+import React, { useState, useEffect } from "react"; // יש לוודא ש-import של useState קיים
+import { supabase } from "../supabaseClient"; // ודא שזה הנתיב הנכון
 
 const UploadImageModal = ({
   onClose,
   onSave,
   entities = [],
-  textBubbles,
-  setTextBubbles,
-  setImages,
-  emojis,
-  updateNodesAndEdges,
+  setIsSaving,
+  isSaving,
+  setShowImageModal, // קבלת setShowImageModal כפרופס
 }) => {
   const [file, setFile] = useState(null);
   const [previewUrl, setPreviewUrl] = useState(null);
   const [targetId, setTargetId] = useState("");
   const [isUploading, setIsUploading] = useState(false);
-  const [isSaving, setIsSaving] = useState(false);
 
   useEffect(() => {
     const handleKeyDown = (e) => {
@@ -77,7 +74,7 @@ const UploadImageModal = ({
       return;
     }
 
-    setIsSaving(true); // הדלקת הלודר של שמירה
+    setIsUploading(true);
 
     try {
       const { data, error } = await supabase
@@ -92,47 +89,21 @@ const UploadImageModal = ({
         ])
         .select();
 
-      if (error) {
+      if (!error && data && data.length > 0) {
+        // אחרי השמירה, נקרא ל- onSave שנמצא ב-App.js
+        onSave(data[0]);
+
+        // סגירת המודל אחרי השמירה
+        setShowImageModal(false);
+      } else {
         console.error("❌ Error uploading image:", error);
         alert("Something went wrong while uploading the image.");
-        return;
       }
-
-      console.log("✅ Image added:", data[0]);
-
-      // שליפת כל התמונות מחדש אחרי השמירה
-      const { data: imagesData, error: fetchError } = await supabase
-        .from("images")
-        .select("*");
-
-      if (fetchError) {
-        console.error("❌ Error fetching images:", fetchError);
-        return;
-      }
-
-      // עדכון סטייט התמונות - רק אם התמונה לא קיימת כבר בסטייט
-      setImages((prevImages) => {
-        // מניח שהמפתח של כל תמונה הוא ה-ID שלה, כך נמנע הוספה כפולה
-        if (prevImages.find((img) => img.id === data[0].id)) {
-          return prevImages; // תמונה כבר קיימת
-        }
-        return [...prevImages, data[0]]; // הוספת תמונה חדשה
-      });
-
-      // קריאה לעדכון הנתונים בגריד
-      updateNodesAndEdges(
-        entities,
-        textBubbles,
-        imagesData, // כל התמונות
-        emojis
-      );
-
-      onSave(data[0]);
     } catch (err) {
       console.error("❌ Unexpected error in UploadImageModal:", err);
       alert("Unexpected error occurred. Please try again.");
     } finally {
-      setIsSaving(false); // כיבוי הלודר אחרי השמירה
+      setIsUploading(false); // כיבוי הלודר אחרי השמירה
     }
   };
 
@@ -190,14 +161,14 @@ const UploadImageModal = ({
             </button>
             <button
               type="submit"
-              disabled={isSaving} // חסום כפתור שמירה אם יש לודר
+              disabled={isUploading} // חסום כפתור שמירה אם יש לודר
               className={`px-4 py-2 rounded ${
-                isSaving
+                isUploading
                   ? "bg-green-300 cursor-not-allowed"
                   : "bg-green-500 hover:bg-green-600 text-white font-semibold"
               }`}
             >
-              {isSaving ? (
+              {isUploading ? (
                 <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
               ) : (
                 "Save"
@@ -206,13 +177,6 @@ const UploadImageModal = ({
           </div>
         </form>
       </div>
-
-      {/* מיני לודר */}
-      {isSaving && (
-        <div className="absolute inset-0 bg-white bg-opacity-70 flex justify-center items-center rounded-lg z-50">
-          <div className="animate-spin rounded-full h-10 w-10 border-t-2 border-b-2 border-green-500"></div>
-        </div>
-      )}
     </div>
   );
 };

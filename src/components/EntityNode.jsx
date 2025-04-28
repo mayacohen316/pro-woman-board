@@ -3,7 +3,7 @@ import { FiTrash2 } from "react-icons/fi";
 
 const EntityNode = ({ data }) => {
   return (
-    <div className="relative bg-white border rounded-xl shadow-lg p-4 w-64 group">
+    <div className="relative bg-white rounded-xl shadow-lg p-4 w-64 group">
       <Handle
         type="target"
         position={Position.Right}
