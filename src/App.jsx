@@ -606,7 +606,7 @@ const App = () => {
     <div className="flex flex-col h-screen">
       <header className="bg-white shadow p-4 flex justify-center items-center">
         <h1 className="text-3xl font-bold text-[#800020] tracking-wide">
-          ProWoman
+          Rooted
         </h1>
       </header>
 
