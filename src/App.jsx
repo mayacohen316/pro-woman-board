@@ -1,636 +1,705 @@
-import React, { useState, useRef, useEffect } from "react";
+import React, { useState, useEffect } from "react";
 import { supabase } from "./supabaseClient";
-
-import EntityCard from "./components/EntityCard";
+import SimpleFlow from "./components/SimpleFlow";
 import AddEntityModal from "./components/AddEntityModal";
 import AddTextBubbleModal from "./components/AddTextBubbleModal";
 import UploadImageModal from "./components/UploadImageModal";
-import ConnectionLine from "./components/ConnectionLine";
-import DraggableWrapper from "./components/DraggableWrapper";
 import AddEmojiModal from "./components/AddEmojiModal";
-import { TransformWrapper, TransformComponent } from "react-zoom-pan-pinch";
+import { ReactFlowProvider, useReactFlow } from "reactflow";
+import { useRef } from "react";
 
 const App = () => {
-  const [entities, setEntities] = useState([
-    {
-      id: "1",
-      name: "Noa",
-      address: "Tel Aviv",
-      contribution: "Creativity",
-      x: 100,
-      y: 100,
-    },
-    {
-      id: "2",
-      name: "Roni",
-      address: "Haifa",
-      contribution: "Tech mentor",
-      x: 350,
-      y: 250,
-    },
-    {
-      id: "3",
-      name: "Tamar",
-      address: "Jerusalem",
-      contribution: "Community builder",
-      x: 100,
-      y: 500,
-    },
-  ]);
-
+  const [entities, setEntities] = useState([]);
   const [textBubbles, setTextBubbles] = useState([]);
-  const [editingTextBubbleId, setEditingTextBubbleId] = useState(null);
   const [images, setImages] = useState([]);
   const [emojis, setEmojis] = useState([]);
-  const [selectedTextId, setSelectedTextId] = useState(null);
-  const [selectedImageId, setSelectedImageId] = useState(null);
-  const [selectedEmojiId, setSelectedEmojiId] = useState(null);
-  const [selectedEntityId, setSelectedEntityId] = useState(null);
-  const [editingText, setEditingText] = useState("");
+  const [isLoading, setIsLoading] = useState(true);
+  const [selectedNodeId, setSelectedNodeId] = useState(null);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [nodeToDelete, setNodeToDelete] = useState(null); // נשמור פה את האובייקט שמבקשים למחוק
 
-  const [showAddModal, setShowAddModal] = useState(false);
+  const [showAddEntityModal, setShowAddEntityModal] = useState(false);
   const [showTextBubbleModal, setShowTextBubbleModal] = useState(false);
   const [showImageModal, setShowImageModal] = useState(false);
   const [showEmojiModal, setShowEmojiModal] = useState(false);
-  const [showEditEntityModal, setShowEditEntityModal] = useState(false);
-  const entityRefs = useRef({});
-  const bubbleRefs = useRef({});
-  const imageRefs = useRef({});
-  const emojiRefs = useRef({});
-  const canvasRef = useRef(null);
-
-  const addEntity = async (entity) => {
-    const newEntity = {
-      ...entity,
-      id: crypto.randomUUID(),
-      x: entity.x || 50,
-      y: entity.y || 50,
-    };
-
-    const { error } = await supabase.from("entities").insert(newEntity);
-    if (error) {
-      console.error("Error inserting entity:", error);
-      return;
-    }
-
-    setEntities([...entities, newEntity]);
-  };
-
-  const updateEntity = async (updatedEntity) => {
-    const { error } = await supabase
-      .from("entities")
-      .update({
-        name: updatedEntity.name,
-        address: updatedEntity.address,
-        contribution: updatedEntity.contribution,
-        linkedin: updatedEntity.linkedin,
-      })
-      .eq("id", updatedEntity.id);
-
-    if (error) {
-      console.error("Error updating entity:", error);
-      return;
-    }
-
-    setEntities((prev) =>
-      prev.map((e) => (e.id === updatedEntity.id ? updatedEntity : e))
-    );
-    setSelectedEntityId(null);
-    setShowEditEntityModal(false);
-  };
-
-  const deleteEntity = async (id) => {
-    console.log("🗑️ Attempting to delete entity:", id);
-
-    // קודם מוחקים את כל מה שקשור
-    const { error: textError } = await supabase
-      .from("text_bubbles")
-      .delete()
-      .eq("targetId", id);
-    const { error: imageError } = await supabase
-      .from("images")
-      .delete()
-      .eq("targetId", id);
-    const { error: emojiError } = await supabase
-      .from("emojis")
-      .delete()
-      .eq("targetId", id);
-
-    // רק אחרי זה מוחקים את ה־Entity
-    const { error: entityError } = await supabase
-      .from("entities")
-      .delete()
-      .eq("id", id);
-
-    if (entityError || textError || imageError || emojiError) {
-      console.error("❌ Error deleting entity or related items:", {
-        entityError,
-        textError,
-        imageError,
-        emojiError,
-      });
-    } else {
-      console.log("✅ Entity and all related items deleted");
-
-      // עדכון ה־UI אחרי הצלחה
-      setEntities((prev) => prev.filter((e) => e.id !== id));
-      setTextBubbles((prev) => prev.filter((b) => b.targetId !== id));
-      setImages((prev) => prev.filter((i) => i.targetId !== id));
-      setEmojis((prev) => prev.filter((e) => e.targetId !== id));
-      setSelectedEntityId(null);
-    }
-  };
-
-  const addTextBubble = async (bubble) => {
-    const { data, error } = await supabase
-      .from("text_bubbles")
-      .insert([{ ...bubble, x: bubble.x || 50, y: bubble.y || 50 }])
-      .select()
-      .single();
-
-    if (error) {
-      console.error("Error adding text bubble:", error);
-      return;
-    }
-
-    setTextBubbles((prev) => [...prev, data]);
-  };
-
-  const deleteTextBubble = async (id) => {
-    const { error } = await supabase.from("text_bubbles").delete().eq("id", id);
-
-    if (error) {
-      console.error("Error deleting text bubble:", error);
-      return;
-    }
-
-    setTextBubbles((prev) => prev.filter((b) => b.id !== id));
-    setSelectedTextId(null);
-  };
-
-  const addImage = async (img) => {
-    const newImage = {
-      ...img,
-      id: crypto.randomUUID(),
-      x: img.x || 50,
-      y: img.y || 50,
-    };
-
-    const { error } = await supabase.from("images").insert([newImage]);
-
-    if (error) {
-      console.error("❌ Error adding image:", error);
-    } else {
-      console.log("✅ Image added to DB");
-      setImages((prev) => [...prev, newImage]);
-    }
-  };
-
-  const deleteImage = async (id) => {
-    setImages((prev) => prev.filter((i) => i.id !== id));
-    setSelectedImageId(null);
-
-    const { error } = await supabase.from("images").delete().eq("id", id);
-
-    if (error) {
-      console.error("❌ Error deleting image:", error);
-    } else {
-      console.log("✅ Image deleted from Supabase");
-    }
-  };
-
-  const addEmoji = async (emoji) => {
-    const newEmoji = {
-      ...emoji,
-      id: crypto.randomUUID(),
-      x: emoji.x || 50,
-      y: emoji.y || 50,
-    };
-
-    setEmojis((prev) => [...prev, newEmoji]);
-
-    const { error } = await supabase.from("emojis").insert([newEmoji]);
-
-    if (error) {
-      console.error("❌ Failed to save emoji to DB:", error);
-    } else {
-      console.log("✅ Emoji saved to DB");
-    }
-  };
-
-  const deleteEmoji = async (id) => {
-    setEmojis((prev) => prev.filter((e) => e.id !== id));
-    setSelectedEmojiId(null);
-
-    const { error } = await supabase.from("emojis").delete().eq("id", id);
-
-    if (error) {
-      console.error("❌ Error deleting emoji:", error);
-    } else {
-      console.log("✅ Emoji deleted from Supabase");
-    }
-  };
-
-  const getAnchorCenter = (ref, containerRef) => {
-    if (!ref || !containerRef) return { x: 0, y: 0 };
-    const refRect = ref.getBoundingClientRect();
-    const containerRect = containerRef.getBoundingClientRect();
-    return {
-      x: refRect.left - containerRect.left + refRect.width / 2,
-      y: refRect.top - containerRect.top + refRect.height / 2,
-    };
-  };
-
-  const [connections, setConnections] = useState([]);
+  const reactFlowInstance = useRef(null);
+  const [newlyAddedNodes, setNewlyAddedNodes] = useState([]);
+  const [newlyAddedEdges, setNewlyAddedEdges] = useState([]);
+  const [nodes, setNodes] = useState([]);
+  const [edges, setEdges] = useState([]);
 
   useEffect(() => {
-    const fetchEntities = async () => {
-      const { data, error } = await supabase.from("entities").select("*");
-      if (error) {
-        console.error("Error fetching entities:", error);
-      } else {
-        setEntities(data);
-      }
+    const fetchData = async () => {
+      const { data: entityData } = await supabase.from("entities").select("*");
+      const { data: bubbleData } = await supabase
+        .from("text_bubbles")
+        .select("*");
+      const { data: imageData } = await supabase.from("images").select("*");
+      const { data: emojiData } = await supabase.from("emojis").select("*");
+
+      setEntities(entityData || []);
+      setTextBubbles(bubbleData || []);
+      setImages(imageData || []);
+      setEmojis(emojiData || []);
+      setIsLoading(false);
     };
 
-    fetchEntities();
+    fetchData();
   }, []);
 
   useEffect(() => {
-    const fetchTextBubbles = async () => {
-      const { data, error } = await supabase.from("text_bubbles").select("*");
-      if (error) {
-        console.error("Error fetching text bubbles:", error);
-      } else {
-        setTextBubbles(data);
-      }
-    };
+    const newNodes = [
+      ...entities.map((e) => ({
+        id: e.id,
+        type: "entity",
+        position: {
+          x: e.x ?? Math.random() * 500,
+          y: e.y ?? Math.random() * 500,
+        },
+        data: {
+          label: e.name,
+          address: e.address,
+          contribution: e.contribution,
+          linkedin: e.linkedin,
+          onDelete: (nodeData) => {
+            setNodeToDelete(nodeData.id);
+            setShowDeleteModal(true);
+          },
+        },
+      })),
+      ...textBubbles.map((b) => ({
+        id: b.id,
+        type: "basic",
+        position: { x: b.x ?? 0, y: b.y ?? 0 },
+        data: {
+          label: b.text,
+          onDelete: (nodeData) => {
+            setNodeToDelete(nodeData);
+            setShowDeleteModal(true);
+          },
+        },
+      })),
+      ...images.map((img) => ({
+        id: img.id,
+        type: "basic",
+        position: { x: img.x ?? 0, y: img.y ?? 0 },
+        data: {
+          label: "Image",
+          url: img.url,
+          onDelete: (nodeData) => {
+            setNodeToDelete(nodeData);
+            setShowDeleteModal(true);
+          },
+        },
+      })),
+      ...emojis.map((emo) => ({
+        id: emo.id,
+        type: "emoji",
+        position: { x: emo.x ?? 0, y: emo.y ?? 0 },
+        data: {
+          label: emo.symbol,
+          onDelete: (nodeData) => {
+            setNodeToDelete(nodeData);
+            setShowDeleteModal(true);
+          },
+        },
+      })),
+    ];
 
-    fetchTextBubbles();
-  }, []);
+    setNodes(newNodes);
+  }, [entities, textBubbles, images, emojis]);
 
   useEffect(() => {
-    const fetchImages = async () => {
-      const { data, error } = await supabase.from("images").select("*");
-      if (error) {
-        console.error("Error fetching images:", error);
-      } else {
-        setImages(data);
-      }
-    };
+    const newEdges = [
+      ...textBubbles.map((b) => ({
+        id: `edge-${b.id}`,
+        source: b.id,
+        target: b.targetId,
+        sourceHandle: null,
+        targetHandle: null,
+      })),
+      ...images.map((img) => ({
+        id: `edge-${img.id}`,
+        source: img.id,
+        target: img.targetId,
+        sourceHandle: null,
+        targetHandle: null,
+      })),
+      ...emojis.map((emo) => ({
+        id: `edge-${emo.id}`,
+        source: emo.id,
+        target: emo.targetId,
+        sourceHandle: null,
+        targetHandle: null,
+      })),
+    ];
 
-    fetchImages();
-  }, []);
-
-  useEffect(() => {
-    const fetchEmojis = async () => {
-      const { data, error } = await supabase.from("emojis").select("*");
-      if (error) {
-        console.error("❌ Failed to load emojis:", error);
-      } else {
-        setEmojis(data);
-      }
-    };
-
-    fetchEmojis();
-  }, []);
-
-  useEffect(() => {
-    const interval = setInterval(() => {
-      const updatedConnections = [
-        ...textBubbles.map((b) => ({
-          from: bubbleRefs.current[b.id],
-          to: entityRefs.current[b.targetId],
-          color: "deeppink",
-        })),
-        ...images.map((img) => ({
-          from: imageRefs.current[img.id],
-          to: entityRefs.current[img.targetId],
-          color: "seagreen",
-        })),
-        ...emojis.map((e) => ({
-          from: emojiRefs.current[e.id],
-          to: entityRefs.current[e.targetId],
-          color: "orange",
-        })),
-      ];
-      setConnections(updatedConnections);
-    }, 100);
-
-    return () => clearInterval(interval);
+    setEdges(newEdges);
   }, [textBubbles, images, emojis]);
 
+  // 🛠 פונקציה שמכניסה entity ל-DB
+  // פונקציה להוספת אובייקט חדש לגריד
+  const handleAddEntity = async (newEntityData) => {
+    const newEntity = {
+      name: newEntityData.name,
+      address: newEntityData.address,
+      contribution: newEntityData.contribution,
+      linkedin: newEntityData.linkedin,
+      x: Math.floor(Math.random() * 800),
+      y: Math.floor(Math.random() * 600),
+    };
+
+    const { data, error } = await supabase
+      .from("entities")
+      .insert([newEntity])
+      .select();
+
+    if (error) {
+      console.error("❌ Error inserting entity:", error.message || error);
+    } else {
+      console.log("✅ Entity added:", data[0]);
+
+      // הוספת אובייקט לסטייט של ה-entities
+      setEntities((prev) => [...prev, data[0]]);
+      // עדכון הסטייט של nodes כך שיתעדכן הגריד
+      setNodes((prev) => [
+        ...prev,
+        {
+          id: data[0].id,
+          type: "entity",
+          position: { x: data[0].x, y: data[0].y },
+          data: { label: data[0].name, address: data[0].address },
+        },
+      ]);
+
+      // לדאוג שנעשה scroll ל-Entity החדש
+      setTimeout(() => {
+        const reactFlow = window.reactFlowInstance;
+        if (reactFlow) {
+          reactFlow.setCenter(data[0].x, data[0].y, {
+            zoom: 1.5,
+            duration: 500,
+          });
+        }
+      }, 300);
+    }
+  };
+
+  const handleSaveTextBubble = async (newBubbleData) => {
+    // מגדירים את המיני לודר
+    setIsLoading(true); // הדלקת הלודר
+
+    const newBubble = {
+      text: newBubbleData.text,
+      targetId: newBubbleData.targetId,
+      x: Math.floor(Math.random() * 800),
+      y: Math.floor(Math.random() * 600),
+    };
+
+    try {
+      // הכנסה ל-DB
+      const { data, error } = await supabase
+        .from("text_bubbles")
+        .insert([newBubble])
+        .select();
+
+      if (error) {
+        console.error(
+          "❌ Error inserting text bubble:",
+          error.message || error
+        );
+        return;
+      }
+
+      console.log("✅ Text bubble added:", data[0]);
+
+      const insertedBubble = data[0];
+
+      // עדכון סטייט הבועות
+      setTextBubbles((prev) => [...prev, insertedBubble]);
+
+      // עדכון הסטייט של nodes (הוספת טקסט לגריד)
+      setNodes((prevNodes) => [
+        ...prevNodes,
+        {
+          id: insertedBubble.id,
+          type: "basic", // סוג הבועה
+          position: { x: insertedBubble.x, y: insertedBubble.y },
+          data: { label: insertedBubble.text },
+        },
+      ]);
+
+      // עדכון הסטייט של edges (יצירת קשר בין הבועה ל-targetId)
+      setEdges((prevEdges) => [
+        ...prevEdges,
+        {
+          id: `edge-${insertedBubble.id}`,
+          source: insertedBubble.id,
+          target: insertedBubble.targetId, // קשר בין הבועה ל-entity
+          sourceHandle: null,
+          targetHandle: null,
+        },
+      ]);
+
+      // עדכון התצוגה (הגריד יתעדכן לפי הצורך)
+      const reactFlow = reactFlowInstance.current;
+      if (reactFlow) {
+        reactFlow.fitView({ padding: 0.2 });
+      }
+    } catch (err) {
+      console.error("❌ Error saving text bubble:", err);
+    } finally {
+      setIsLoading(false); // כיבוי הלודר אחרי שמירה
+      setShowTextBubbleModal(false); // סגירת המודאל אחרי השמירה
+    }
+  };
+
+  const handleSaveImage = async (newImageData) => {
+    const newImage = {
+      url: newImageData.url,
+      targetId: newImageData.targetId,
+      x: Math.floor(Math.random() * 500),
+      y: Math.floor(Math.random() * 500),
+    };
+
+    try {
+      // הכנסה ל-DB
+      const { data, error } = await supabase
+        .from("images")
+        .insert([newImage])
+        .select();
+
+      if (error) {
+        console.error("❌ Error inserting image:", error.message || error);
+        return;
+      }
+
+      console.log("✅ Image added:", data[0]);
+
+      // עדכון סטייט התמונות ישירות (בלי לבצע fetch מחדש)
+      setImages((prevImages) => [...prevImages, data[0]]); // הוספת התמונה החדשה ישירות לסטייט
+
+      // עדכון הסטייט של nodes והקשרים
+      updateNodesAndEdges(
+        entities,
+        textBubbles,
+        [...images, data[0]], // עדכון עם התמונות החדשות
+        emojis
+      );
+    } catch (err) {
+      console.error("❌ Error saving image:", err);
+    } finally {
+      // כיבוי הלודר
+      setShowImageModal(false);
+    }
+  };
+
+  const handleSaveEmoji = async (newEmojiData) => {
+    setIsLoading(true); // הדלקת לודר
+
+    const newEmoji = {
+      symbol: newEmojiData.symbol,
+      targetId: newEmojiData.targetId,
+      x: Math.floor(Math.random() * 800),
+      y: Math.floor(Math.random() * 600),
+    };
+
+    const { data, error } = await supabase
+      .from("emojis")
+      .insert([newEmoji])
+      .select();
+
+    if (error) {
+      console.error("❌ Error inserting emoji:", error.message || error);
+      setIsLoading(false); // כיבוי לודר במקרה של טעות
+      return;
+    }
+
+    console.log("✅ Emoji added:", data[0]);
+
+    const insertedEmoji = data[0];
+
+    // עדכון הסטייט של emojis
+    setEmojis((prev) => [...prev, insertedEmoji]);
+
+    // עדכון הסטייט של nodes כך שהאימוג'י יתווסף לגריד
+    setNodes((prevNodes) => [
+      ...prevNodes,
+      {
+        id: insertedEmoji.id,
+        type: "emoji", // סוג האימוג'י
+        position: { x: insertedEmoji.x, y: insertedEmoji.y },
+        data: { label: insertedEmoji.symbol },
+      },
+    ]);
+
+    // עדכון הסטייט של edges, יצירת קשר אם יש צורך
+    setEdges((prevEdges) => [
+      ...prevEdges,
+      {
+        id: `edge-${insertedEmoji.id}`,
+        source: insertedEmoji.id,
+        target: insertedEmoji.targetId,
+        sourceHandle: null,
+        targetHandle: null,
+      },
+    ]);
+
+    setIsLoading(false); // כיבוי לודר
+  };
+
+  const handleSaveEntity = async (newEntityData) => {
+    const newEntity = {
+      name: newEntityData.name,
+      address: newEntityData.address,
+      contribution: newEntityData.contribution,
+      linkedin: newEntityData.linkedin,
+      x: Math.floor(Math.random() * 800),
+      y: Math.floor(Math.random() * 600),
+    };
+
+    const { data, error } = await supabase
+      .from("entities")
+      .insert([newEntity])
+      .select();
+
+    if (error) {
+      console.error("❌ Error inserting entity:", error.message || error);
+      return;
+    }
+
+    console.log("✅ Entity added:", data[0]);
+
+    const insertedEntity = data[0];
+
+    // עדכון סטייט ה-entities
+    setEntities((prev) => [...prev, insertedEntity]);
+
+    // עדכון הסטייט של nodes
+    setNodes((prevNodes) => [
+      ...prevNodes,
+      {
+        id: insertedEntity.id,
+        type: "entity", // סוג האובייקט החדש
+        position: { x: insertedEntity.x, y: insertedEntity.y },
+        data: { label: insertedEntity.name, address: insertedEntity.address },
+      },
+    ]);
+
+    // יצירת edge חדש עבור ה-entity
+    const newEdge = {
+      id: `edge-${insertedEntity.id}`,
+      source: insertedEntity.id,
+      target: insertedEntity.targetId, // targetId חייב להיות מוגדר
+    };
+
+    // עדכון הסטייט של edges
+    setEdges((prevEdges) => [...prevEdges, newEdge]);
+
+    // להפעיל את הפוקנציה fitView אחרי שמירת ה-node החדש
+    setTimeout(() => {
+      const reactFlow = reactFlowInstance.current;
+      if (reactFlow) {
+        reactFlow.fitView({ padding: 0.2 });
+      }
+    }, 300); // המתן 300ms ואז תעדכן את ה-view
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!selectedNodeId) return;
+
+    const nodeToDelete = nodes.find((n) => n.id === selectedNodeId);
+    if (!nodeToDelete) return;
+
+    setIsDeleting(true);
+    console.log("Deleting node:", nodeToDelete);
+
+    try {
+      if (nodeToDelete.type === "entity") {
+        // מחיקת פריטי הקישור: text_bubbles, images, emojis
+        const relatedEdges = edges.filter((e) => e.target === nodeToDelete.id);
+        const relatedIds = relatedEdges.map((e) => e.source);
+
+        console.log("Related nodes to delete:", relatedIds);
+
+        // מחיקת הסטייט המקומי לפני מחיקת ה-DB
+        setTextBubbles((prev) =>
+          prev.filter((bub) => !relatedIds.includes(bub.id))
+        );
+        setImages((prev) => prev.filter((img) => !relatedIds.includes(img.id)));
+        setEmojis((prev) => prev.filter((emo) => !relatedIds.includes(emo.id)));
+        setEntities((prev) => prev.filter((ent) => ent.id !== nodeToDelete.id));
+
+        // מחיקת כל הקישורים ב-DB
+        await Promise.all(
+          relatedIds.map(async (id) => {
+            await supabase.from("text_bubbles").delete().eq("id", id);
+            await supabase.from("images").delete().eq("id", id);
+            await supabase.from("emojis").delete().eq("id", id);
+          })
+        );
+
+        // מחיקת ה-entity
+        await supabase.from("entities").delete().eq("id", nodeToDelete.id);
+
+        console.log("Deleted entity from DB:", nodeToDelete.id);
+      } else {
+        // מחיקת פריט רגיל (textBubble, emoji, image)
+        let tableName = "text_bubbles";
+        let setStateFunction = setTextBubbles;
+
+        if (
+          nodeToDelete.type === "basic" &&
+          nodeToDelete.data.label === "Image"
+        ) {
+          tableName = "images";
+          setStateFunction = setImages;
+        } else if (nodeToDelete.type === "emoji") {
+          tableName = "emojis";
+          setStateFunction = setEmojis;
+        }
+
+        await supabase.from(tableName).delete().eq("id", selectedNodeId);
+
+        // מחיקת הסטייט המקומי
+        setStateFunction((prev) =>
+          prev.filter((item) => item.id !== selectedNodeId)
+        );
+        console.log(`Deleted ${tableName} from DB: ${selectedNodeId}`);
+      }
+
+      setShowDeleteModal(false);
+      setSelectedNodeId(null);
+    } catch (error) {
+      console.error("❌ Failed to delete node:", error);
+      alert("Failed to delete everything properly. Try again.");
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
+  const handleDeleteNode = async (node) => {
+    const idToDelete = node.id;
+    let tableName = "";
+    let setStateFunction = null;
+
+    if (node.type === "entity") {
+      tableName = "entities";
+      setStateFunction = setEntities;
+    } else if (node.type === "basic") {
+      if (node.data?.label === "Image") {
+        tableName = "images";
+        setStateFunction = setImages;
+      } else {
+        tableName = "text_bubbles";
+        setStateFunction = setTextBubbles;
+      }
+    } else if (node.type === "emoji") {
+      tableName = "emojis";
+      setStateFunction = setEmojis;
+    }
+
+    if (!tableName || !setStateFunction) {
+      console.error("Unknown node type, cannot delete.");
+      return;
+    }
+
+    try {
+      const { error } = await supabase
+        .from(tableName)
+        .delete()
+        .eq("id", idToDelete);
+
+      if (error) {
+        console.error("❌ Failed to delete from DB:", error);
+        alert("Failed to delete from database.");
+        return;
+      }
+
+      console.log(`✅ Deleted ${idToDelete} from ${tableName}`);
+
+      // 👇 עכשיו מוחקים גם מהסטייט המקומי!
+      setStateFunction((prev) => prev.filter((item) => item.id !== idToDelete));
+    } catch (err) {
+      console.error("❌ Unexpected error during delete:", err);
+      alert("Unexpected error during delete.");
+    }
+  };
+
+  const updateNodesAndEdges = (
+    entitiesList,
+    bubblesList,
+    imagesList,
+    emojisList
+  ) => {
+    const newNodes = [
+      ...entitiesList.map((e) => ({
+        id: e.id,
+        type: "entity",
+        position: { x: e.x ?? Math.random() * 500, y: e.y ?? 0 },
+        data: {
+          label: e.name,
+          address: e.address,
+          contribution: e.contribution,
+          linkedin: e.linkedin,
+          onDelete: (nodeData) => {
+            setSelectedNodeId(nodeData.id);
+            setShowDeleteModal(true);
+          },
+        },
+      })),
+      ...bubblesList.map((b) => ({
+        id: b.id,
+        type: "basic",
+        position: { x: b.x ?? 0, y: b.y ?? 0 },
+        data: {
+          label: b.text,
+          onDelete: (nodeData) => {
+            setSelectedNodeId(nodeData.id);
+            setShowDeleteModal(true);
+          },
+        },
+      })),
+      ...imagesList.map((img) => ({
+        id: img.id,
+        type: "basic",
+        position: { x: img.x ?? 0, y: img.y ?? 0 },
+        data: {
+          label: "Image",
+          url: img.url,
+          onDelete: (nodeData) => {
+            setSelectedNodeId(nodeData.id);
+            setShowDeleteModal(true);
+          },
+        },
+      })),
+      ...emojisList.map((emo) => ({
+        id: emo.id,
+        type: "emoji",
+        position: { x: emo.x ?? 0, y: emo.y ?? 0 },
+        data: {
+          label: emo.symbol,
+          onDelete: (nodeData) => {
+            setSelectedNodeId(nodeData.id);
+            setShowDeleteModal(true);
+          },
+        },
+      })),
+    ];
+
+    const newEdges = [
+      ...bubblesList.map((b) => ({
+        id: `edge-${b.id}`,
+        source: b.id,
+        target: b.targetId,
+      })),
+      ...imagesList.map((img) => ({
+        id: `edge-${img.id}`,
+        source: img.id,
+        target: img.targetId,
+      })),
+      ...emojisList.map((emo) => ({
+        id: `edge-${emo.id}`,
+        source: emo.id,
+        target: emo.targetId,
+      })),
+    ];
+
+    setNodes(newNodes);
+    setEdges(newEdges);
+  };
+
   return (
-    <div className="flex flex-col h-screen bg-gray-100">
-      <header className="bg-white shadow p-4 sticky top-0 z-10">
-        <h1 className="text-3xl font-bold text-center text-purple-600">
-          Pro Woman: Entity Grid
-        </h1>
-        <div className="mt-4 flex flex-col sm:flex-row sm:justify-center gap-4">
-          <button
-            onClick={() => setShowImageModal(true)}
-            className="bg-green-600 text-white px-4 py-2 rounded-full w-full sm:w-auto"
-          >
-            📷 Upload Image
-          </button>
-          <button
-            onClick={() => setShowTextBubbleModal(true)}
-            className="bg-pink-500 text-white px-4 py-2 rounded-full w-full sm:w-auto"
-          >
-            📝 Add text bubble
-          </button>
-          <button
-            onClick={() => setShowEmojiModal(true)}
-            className="bg-yellow-500 text-white px-4 py-2 rounded-full w-full sm:w-auto"
-          >
-            📍 Add emoji
-          </button>
-          <button
-            onClick={() => setShowAddModal(true)}
-            className="bg-purple-600 text-white w-12 h-12 rounded-full self-center sm:self-auto"
-          >
-            +
-          </button>
-        </div>
+    <div className="flex flex-col h-screen">
+      <header className="bg-white shadow p-4 flex justify-center items-center">
+        <h1 className="text-2xl font-bold text-purple-600">Pro Woman</h1>
       </header>
 
-      <main className="flex-1 overflow-auto relative">
-        <svg
-          ref={canvasRef}
-          className="absolute top-0 left-0 w-full h-full pointer-events-none z-0"
-        >
-          {connections.map((conn, i) => {
-            const from = getAnchorCenter(conn.from, canvasRef.current);
-            const to = getAnchorCenter(conn.to, canvasRef.current);
-            return (
-              <line
-                key={i}
-                x1={from.x}
-                y1={from.y}
-                x2={to.x}
-                y2={to.y}
-                stroke={conn.color}
-                strokeWidth="2"
-              />
-            );
-          })}
-        </svg>
-
-        <div className="relative w-full h-[2000px] touch-none">
-          {/* Entities */}
-          {entities.map((entity) => (
-            <DraggableWrapper
-              key={entity.id}
-              id={`entity-${entity.id}`}
-              x={entity.x}
-              y={entity.y}
-              onStop={(x, y) => {
-                setEntities((prev) =>
-                  prev.map((e) => (e.id === entity.id ? { ...e, x, y } : e))
-                );
-                supabase
-                  .from("entities")
-                  .update({ x: Number(x), y: Number(y) }) // 🟢 Number!
-                  .eq("id", entity.id)
-                  .then(({ error }) => {
-                    if (error) {
-                      console.error(
-                        "❌ Error updating entity position:",
-                        error
-                      );
-                    } else {
-                      console.log("✅ Entity position updated");
-                    }
-                  });
-              }}
-            >
-              <div
-                ref={(el) => (entityRefs.current[entity.id] = el)}
-                onClick={() => setSelectedEntityId(entity.id)}
-              >
-                <EntityCard entity={entity} />
-                {selectedEntityId === entity.id && (
-                  <div className="flex gap-2 mt-1">
-                    <button
-                      className="text-sm text-blue-600 underline"
-                      onClick={() => setShowEditEntityModal(true)}
-                    >
-                      ✏️ Edit
-                    </button>
-                    <button
-                      className="text-sm text-red-600 underline"
-                      onClick={() => deleteEntity(entity.id)}
-                    >
-                      ✕ Delete
-                    </button>
-                  </div>
-                )}
-              </div>
-            </DraggableWrapper>
-          ))}
-
-          {/* Text Bubbles */}
-          {textBubbles.map((bubble) => (
-            <DraggableWrapper
-              key={bubble.id}
-              id={`bubble-${bubble.id}`}
-              x={bubble.x}
-              y={bubble.y}
-              onStop={(x, y) => {
-                setTextBubbles((prev) =>
-                  prev.map((b) => (b.id === bubble.id ? { ...b, x, y } : b))
-                );
-                supabase
-                  .from("text_bubbles")
-                  .update({ x: Number(x), y: Number(y) })
-                  .eq("id", bubble.id)
-                  .select() // הוספת השורה הזאת עוזרת להבין אם זה עובד
-                  .then(({ data, error }) => {
-                    if (error) {
-                      console.error(
-                        "❌ Error updating bubble position:",
-                        error
-                      );
-                    } else {
-                      console.log("✅ Text bubble position updated:", data);
-                    }
-                  });
-              }}
-            >
-              <div
-                ref={(el) => (bubbleRefs.current[bubble.id] = el)}
-                className="bg-yellow-100 rounded px-3 py-2 text-black w-fit relative"
-                onClick={() => setSelectedTextId(bubble.id)}
-              >
-                {editingTextBubbleId === bubble.id ? (
-                  <div className="flex items-center gap-2">
-                    <input
-                      className="border px-2 py-1 text-sm"
-                      value={editingText}
-                      onChange={(e) => setEditingText(e.target.value)}
-                    />
-                    <button
-                      className="text-green-600 text-sm bg-white rounded px-2"
-                      onClick={() => {
-                        updateTextBubble({ ...bubble, text: editingText });
-                      }}
-                    >
-                      💾
-                    </button>
-                  </div>
-                ) : (
-                  <span>{bubble.text}</span>
-                )}
-
-                {selectedTextId === bubble.id && (
-                  <div className="absolute top-0 right-0 flex gap-1">
-                    <button
-                      onClick={() => deleteTextBubble(bubble.id)}
-                      className="text-red-600 text-sm bg-white rounded"
-                    >
-                      ✕
-                    </button>
-                    <button
-                      onClick={() => {
-                        setEditingTextBubbleId(bubble.id);
-                        setEditingText(bubble.text); // הכנסה של הטקסט הקיים ל־state
-                      }}
-                      className="text-blue-600 text-sm bg-white rounded"
-                    >
-                      ✏️
-                    </button>
-                  </div>
-                )}
-              </div>
-            </DraggableWrapper>
-          ))}
-
-          {/* Images */}
-          {images.map((img) => (
-            <DraggableWrapper
-              key={img.id}
-              id={`image-${img.id}`}
-              x={img.x}
-              y={img.y}
-              onStop={(x, y) => {
-                const updatedImages = images.map((i) =>
-                  i.id === img.id ? { ...i, x, y } : i
-                );
-                setImages(updatedImages);
-
-                supabase
-                  .from("images")
-                  .update({ x: Number(x), y: Number(y) })
-                  .eq("id", img.id)
-                  .then(({ error }) => {
-                    if (error) {
-                      console.error("❌ Error updating image position:", error);
-                    } else {
-                      console.log("✅ Image position updated");
-                    }
-                  });
-              }}
-            >
-              <div
-                ref={(el) => (imageRefs.current[img.id] = el)}
-                onClick={() => setSelectedImageId(img.id)}
-                className="w-24 h-24 relative"
-              >
-                <img
-                  src={img.url}
-                  alt="linked"
-                  className="w-full h-full object-cover rounded shadow"
-                />
-                {selectedImageId === img.id && (
-                  <button
-                    onClick={() => deleteImage(img.id)}
-                    className="absolute top-0 right-0 text-red-600 text-sm bg-white rounded"
-                  >
-                    ✕
-                  </button>
-                )}
-              </div>
-            </DraggableWrapper>
-          ))}
-
-          {/* Emojis */}
-          {emojis.map((emoji) => (
-            <DraggableWrapper
-              key={emoji.id}
-              id={`emoji-${emoji.id}`}
-              x={emoji.x}
-              y={emoji.y}
-              onStop={(x, y) => {
-                setEmojis((prev) =>
-                  prev.map((e) => (e.id === emoji.id ? { ...e, x, y } : e))
-                );
-
-                supabase
-                  .from("emojis")
-                  .update({ x: Number(x), y: Number(y) })
-                  .eq("id", emoji.id)
-                  .then(({ error }) => {
-                    if (error) {
-                      console.error("❌ Error updating emoji position:", error);
-                    } else {
-                      console.log("✅ Emoji position updated");
-                    }
-                  });
-              }}
-            >
-              <div
-                ref={(el) => (emojiRefs.current[emoji.id] = el)}
-                onClick={() => setSelectedEmojiId(emoji.id)}
-                className="text-3xl relative"
-              >
-                {emoji.symbol}
-                {selectedEmojiId === emoji.id && (
-                  <button
-                    onClick={() => deleteEmoji(emoji.id)}
-                    className="absolute top-0 right-0 text-red-600 text-sm bg-white rounded"
-                  >
-                    ✕
-                  </button>
-                )}
-              </div>
-            </DraggableWrapper>
-          ))}
-        </div>
+      <main className="flex-1 overflow-hidden">
+        {isLoading || nodes.length === 0 ? (
+          <div className="flex justify-center items-center h-full">
+            <div className="animate-spin rounded-full h-16 w-16 border-t-4 border-purple-500 border-solid"></div>
+          </div>
+        ) : (
+          <ReactFlowProvider>
+            <SimpleFlow
+              nodes={nodes}
+              edges={edges}
+              setTextBubbles={setTextBubbles}
+              setImages={setImages}
+              setEmojis={setEmojis}
+            />
+          </ReactFlowProvider>
+        )}
       </main>
 
-      {/* Modals */}
-      {showAddModal && (
+      <div className="fixed bottom-4 left-1/2 transform -translate-x-1/2 flex gap-4">
+        <button
+          onClick={() => setShowAddEntityModal(true)}
+          className="bg-purple-600 text-white px-4 py-2 rounded"
+        >
+          ➕
+        </button>
+        <button
+          onClick={() => setShowTextBubbleModal(true)}
+          className="bg-pink-500 text-white px-4 py-2 rounded"
+        >
+          📝 Add Bubble
+        </button>
+        <button
+          onClick={() => setShowImageModal(true)}
+          className="bg-green-500 text-white px-4 py-2 rounded"
+        >
+          📷 Add Image
+        </button>
+        <button
+          onClick={() => setShowEmojiModal(true)}
+          className="bg-yellow-500 text-white px-4 py-2 rounded"
+        >
+          😀 Add Emoji
+        </button>
+      </div>
+
+      {showAddEntityModal && (
         <AddEntityModal
-          onClose={() => setShowAddModal(false)}
-          onSave={addEntity}
-        />
-      )}
-      {showEditEntityModal && (
-        <AddEntityModal
-          onClose={() => setShowEditEntityModal(false)}
-          onSave={updateEntity}
-          entity={entities.find((e) => e.id === selectedEntityId)}
+          onClose={() => setShowAddEntityModal(false)}
+          onSave={handleSaveEntity}
         />
       )}
       {showTextBubbleModal && (
         <AddTextBubbleModal
           onClose={() => setShowTextBubbleModal(false)}
-          onSave={addTextBubble}
+          onSave={(newData) => handleSaveTextBubble(newData)} // 🛠️ שינוי כאן
           entities={entities}
         />
       )}
+
       {showImageModal && (
         <UploadImageModal
           onClose={() => setShowImageModal(false)}
-          onSave={addImage}
+          onSave={(newData) => handleSaveImage(newData)}
           entities={entities}
+          setImages={setImages}
+          textBubbles={textBubbles}
+          emojis={emojis} // העבר את emojis כאן
+          updateNodesAndEdges={updateNodesAndEdges}
         />
       )}
+
       {showEmojiModal && (
         <AddEmojiModal
           onClose={() => setShowEmojiModal(false)}
-          onSave={addEmoji}
+          onSave={(newData) => handleSaveEmoji(newData)} // 🛠️ שינוי כאן
           entities={entities}
+        />
+      )}
+
+      {showDeleteModal && (
+        <DeleteConfirmModal
+          onCancel={() => setShowDeleteModal(false)}
+          onConfirm={handleConfirmDelete}
+          isEntity={nodes.find((n) => n.id === nodeToDelete)?.type === "entity"}
+          isDeleting={isDeleting}
         />
       )}
     </div>

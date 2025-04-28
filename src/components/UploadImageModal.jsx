@@ -1,51 +1,218 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
+import { supabase } from "../supabaseClient";
 
-const UploadImageModal = ({ onClose, onSave, entities }) => {
-  const [image, setImage] = useState(null);
-  const [targetId, setTargetId] = useState(entities[0]?.id || "");
+const UploadImageModal = ({
+  onClose,
+  onSave,
+  entities = [],
+  textBubbles,
+  setTextBubbles,
+  setImages,
+  emojis,
+  updateNodesAndEdges,
+}) => {
+  const [file, setFile] = useState(null);
+  const [previewUrl, setPreviewUrl] = useState(null);
+  const [targetId, setTargetId] = useState("");
+  const [isUploading, setIsUploading] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
 
-  const handleUpload = (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.key === "Escape") {
+        onClose();
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [onClose]);
+
+  const handleFileChange = (e) => {
+    const selectedFile = e.target.files[0];
+    if (!selectedFile) return;
+
+    if (selectedFile.size > 5 * 1024 * 1024) {
+      alert(
+        "The selected image is too large. Please choose an image under 5MB."
+      );
+      return;
+    }
+
+    setIsUploading(true);
 
     const reader = new FileReader();
-    reader.onloadend = () => {
-      onSave({ url: reader.result, targetId });
-      onClose();
+    reader.onload = (event) => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement("canvas");
+        const maxWidth = 800;
+        const scaleFactor = Math.min(1, maxWidth / img.width);
+
+        canvas.width = img.width * scaleFactor;
+        canvas.height = img.height * scaleFactor;
+
+        const ctx = canvas.getContext("2d");
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+
+        const compressedDataUrl = canvas.toDataURL("image/jpeg", 0.8);
+
+        setPreviewUrl(compressedDataUrl);
+        setFile(selectedFile);
+        setIsUploading(false);
+      };
+      img.src = event.target.result;
     };
-    reader.readAsDataURL(file);
+    reader.readAsDataURL(selectedFile);
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+
+    if (!file || !previewUrl) {
+      alert("Please select an image.");
+      return;
+    }
+    if (!targetId) {
+      alert("Please select an entity to connect to.");
+      return;
+    }
+
+    setIsSaving(true); // הדלקת הלודר של שמירה
+
+    try {
+      const { data, error } = await supabase
+        .from("images")
+        .insert([
+          {
+            url: previewUrl,
+            targetId,
+            x: Math.random() * 500,
+            y: Math.random() * 500,
+          },
+        ])
+        .select();
+
+      if (error) {
+        console.error("❌ Error uploading image:", error);
+        alert("Something went wrong while uploading the image.");
+        return;
+      }
+
+      console.log("✅ Image added:", data[0]);
+
+      // שליפת כל התמונות מחדש אחרי השמירה
+      const { data: imagesData, error: fetchError } = await supabase
+        .from("images")
+        .select("*");
+
+      if (fetchError) {
+        console.error("❌ Error fetching images:", fetchError);
+        return;
+      }
+
+      // עדכון סטייט התמונות - רק אם התמונה לא קיימת כבר בסטייט
+      setImages((prevImages) => {
+        // מניח שהמפתח של כל תמונה הוא ה-ID שלה, כך נמנע הוספה כפולה
+        if (prevImages.find((img) => img.id === data[0].id)) {
+          return prevImages; // תמונה כבר קיימת
+        }
+        return [...prevImages, data[0]]; // הוספת תמונה חדשה
+      });
+
+      // קריאה לעדכון הנתונים בגריד
+      updateNodesAndEdges(
+        entities,
+        textBubbles,
+        imagesData, // כל התמונות
+        emojis
+      );
+
+      onSave(data[0]);
+    } catch (err) {
+      console.error("❌ Unexpected error in UploadImageModal:", err);
+      alert("Unexpected error occurred. Please try again.");
+    } finally {
+      setIsSaving(false); // כיבוי הלודר אחרי השמירה
+    }
   };
 
   return (
-    <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-30 z-20">
-      <div className="bg-white p-6 rounded shadow-lg w-80">
-        <h2 className="text-xl font-bold mb-4">Upload Image</h2>
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50">
+      <div className="bg-white rounded-lg shadow-lg p-6 w-96 relative">
+        <h2 className="text-2xl font-bold text-green-600 mb-6 text-center">
+          Upload Image
+        </h2>
 
-        <select
-          value={targetId}
-          onChange={(e) => setTargetId(e.target.value)}
-          className="border p-2 rounded mb-4 w-full"
-        >
-          {entities.map((e) => (
-            <option key={e.id} value={e.id}>
-              {e.name}
-            </option>
-          ))}
-        </select>
+        <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+          <input
+            type="file"
+            accept="image/*"
+            onChange={handleFileChange}
+            className="border border-gray-300 rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-green-400"
+          />
 
-        <input
-          type="file"
-          accept="image/*"
-          onChange={handleUpload}
-          className="mb-4"
-        />
+          {/* Preview Image or Loader */}
+          <div className="flex justify-center items-center min-h-[160px]">
+            {isUploading ? (
+              <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-green-500"></div>
+            ) : (
+              previewUrl && (
+                <img
+                  src={previewUrl}
+                  alt="Preview"
+                  className="max-h-40 object-contain border rounded mt-2"
+                />
+              )
+            )}
+          </div>
 
-        <div className="flex justify-end gap-2">
-          <button onClick={onClose} className="bg-gray-300 px-4 py-2 rounded">
-            Cancel
-          </button>
-        </div>
+          <select
+            value={targetId}
+            onChange={(e) => setTargetId(e.target.value)}
+            className="border border-gray-300 rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-green-400"
+            required
+          >
+            <option value="">Select Entity</option>
+            {entities.map((entity) => (
+              <option key={entity.id} value={entity.id}>
+                {entity.name}
+              </option>
+            ))}
+          </select>
+
+          <div className="flex justify-end gap-3 mt-4">
+            <button
+              type="button"
+              onClick={onClose}
+              className="px-4 py-2 rounded bg-gray-300 hover:bg-gray-400"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={isSaving} // חסום כפתור שמירה אם יש לודר
+              className={`px-4 py-2 rounded ${
+                isSaving
+                  ? "bg-green-300 cursor-not-allowed"
+                  : "bg-green-500 hover:bg-green-600 text-white font-semibold"
+              }`}
+            >
+              {isSaving ? (
+                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+              ) : (
+                "Save"
+              )}
+            </button>
+          </div>
+        </form>
       </div>
+
+      {/* מיני לודר */}
+      {isSaving && (
+        <div className="absolute inset-0 bg-white bg-opacity-70 flex justify-center items-center rounded-lg z-50">
+          <div className="animate-spin rounded-full h-10 w-10 border-t-2 border-b-2 border-green-500"></div>
+        </div>
+      )}
     </div>
   );
 };
