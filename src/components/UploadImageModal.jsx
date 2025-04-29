@@ -1,28 +1,19 @@
-import React, { useState, useEffect } from "react"; // יש לוודא ש-import של useState קיים
-import { supabase } from "../supabaseClient"; // ודא שזה הנתיב הנכון
+import React, { useState, useEffect } from "react";
 
-const UploadImageModal = ({
-  onClose,
-  onSave,
-  entities = [],
-  setIsSaving,
-  isSaving,
-  setShowImageModal, // קבלת setShowImageModal כפרופס
-}) => {
+const UploadImageModal = ({ onClose, onSave, entities = [], isSaving }) => {
   const [file, setFile] = useState(null);
   const [previewUrl, setPreviewUrl] = useState(null);
   const [targetId, setTargetId] = useState("");
-  const [isUploading, setIsUploading] = useState(false);
 
   useEffect(() => {
     const handleKeyDown = (e) => {
-      if (e.key === "Escape") {
+      if (e.key === "Escape" && !isSaving) {
         onClose();
       }
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [onClose]);
+  }, [onClose, isSaving]);
 
   const handleFileChange = (e) => {
     const selectedFile = e.target.files[0];
@@ -34,8 +25,6 @@ const UploadImageModal = ({
       );
       return;
     }
-
-    setIsUploading(true);
 
     const reader = new FileReader();
     reader.onload = (event) => {
@@ -55,7 +44,6 @@ const UploadImageModal = ({
 
         setPreviewUrl(compressedDataUrl);
         setFile(selectedFile);
-        setIsUploading(false);
       };
       img.src = event.target.result;
     };
@@ -74,37 +62,8 @@ const UploadImageModal = ({
       return;
     }
 
-    setIsUploading(true);
-
-    try {
-      const { data, error } = await supabase
-        .from("images")
-        .insert([
-          {
-            url: previewUrl,
-            targetId,
-            x: Math.random() * 500,
-            y: Math.random() * 500,
-          },
-        ])
-        .select();
-
-      if (!error && data && data.length > 0) {
-        // אחרי השמירה, נקרא ל- onSave שנמצא ב-App.js
-        onSave(data[0]);
-
-        // סגירת המודל אחרי השמירה
-        setShowImageModal(false);
-      } else {
-        console.error("❌ Error uploading image:", error);
-        alert("Something went wrong while uploading the image.");
-      }
-    } catch (err) {
-      console.error("❌ Unexpected error in UploadImageModal:", err);
-      alert("Unexpected error occurred. Please try again.");
-    } finally {
-      setIsUploading(false); // כיבוי הלודר אחרי השמירה
-    }
+    await onSave({ url: previewUrl, targetId }); // רק שולח ל-App
+    onClose(); // סוגר רק אחרי שהשמירה הסתיימה
   };
 
   return (
@@ -120,11 +79,11 @@ const UploadImageModal = ({
             accept="image/*"
             onChange={handleFileChange}
             className="border border-gray-300 rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-green-400"
+            disabled={isSaving}
           />
 
-          {/* Preview Image or Loader */}
           <div className="flex justify-center items-center min-h-[160px]">
-            {isUploading ? (
+            {isSaving ? (
               <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-green-500"></div>
             ) : (
               previewUrl && (
@@ -142,6 +101,7 @@ const UploadImageModal = ({
             onChange={(e) => setTargetId(e.target.value)}
             className="border border-gray-300 rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-green-400"
             required
+            disabled={isSaving}
           >
             <option value="">Select Entity</option>
             {entities.map((entity) => (
@@ -155,20 +115,21 @@ const UploadImageModal = ({
             <button
               type="button"
               onClick={onClose}
+              disabled={isSaving}
               className="px-4 py-2 rounded bg-gray-300 hover:bg-gray-400"
             >
               Cancel
             </button>
             <button
               type="submit"
-              disabled={isUploading} // חסום כפתור שמירה אם יש לודר
+              disabled={isSaving}
               className={`px-4 py-2 rounded ${
-                isUploading
-                  ? "bg-[#9d174d]-300 cursor-not-allowed"
+                isSaving
+                  ? "bg-gray-300 cursor-not-allowed"
                   : "bg-[#9d174d] hover:bg-[#831843] text-white font-semibold"
-              }`}
+              } flex items-center justify-center gap-2`}
             >
-              {isUploading ? (
+              {isSaving ? (
                 <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
               ) : (
                 "Save"

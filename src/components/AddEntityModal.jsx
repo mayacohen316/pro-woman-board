@@ -15,16 +15,13 @@ const AddEntityModal = ({ onClose, onSave, isSaving }) => {
 
   const handleSubmit = (e) => {
     e.preventDefault();
-
-    const newEntity = {
+    onSave({
       ...formData,
       x: Math.random() * 800,
       y: Math.random() * 600,
-    };
-
-    // שולח ל-App שמירה ואז יחזור עם הנתונים ויעדכן את הגריד
-    onSave(newEntity);
-    onClose(); // סוגר מודאל
+    });
+    // שימי לב: לא סוגרים כאן את המודאל!! (onClose)
+    // סוגרים אחרי הצלחה מתוך App.jsx
   };
 
   return (
@@ -75,21 +72,24 @@ const AddEntityModal = ({ onClose, onSave, isSaving }) => {
             <button
               type="button"
               onClick={onClose}
+              disabled={isSaving}
               className="text-gray-600 hover:text-gray-800"
             >
-              cancel
+              Cancel
             </button>
             <button
               type="submit"
-              className={`${
-                isSaving ? "bg-gray-300 cursor-not-allowed" : "bg-[#9d174d]"
-              }  hover:bg-[#831843] text-white px-4 py-2 rounded`}
-              disabled={isSaving} // אם יש לודר, לא לאפשר שמירה
+              disabled={isSaving}
+              className={`flex items-center justify-center gap-2 px-4 py-2 rounded-lg ${
+                isSaving
+                  ? "bg-gray-300 cursor-not-allowed"
+                  : "bg-[#9d174d] hover:bg-[#831843] text-white"
+              } transition`}
             >
               {isSaving ? (
                 <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
               ) : (
-                "save"
+                "Save"
               )}
             </button>
           </div>

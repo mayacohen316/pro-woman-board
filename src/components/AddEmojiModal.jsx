@@ -25,25 +25,29 @@ const emojiList = [
 const AddEmojiModal = ({ onClose, onSave, entities }) => {
   const [symbol, setSymbol] = useState(emojiList[0]);
   const [targetId, setTargetId] = useState("");
+  const [isSaving, setIsSaving] = useState(false); // נוסיף סטייט
 
   useEffect(() => {
     const handleKeyDown = (e) => {
-      if (e.key === "Escape") {
+      if (e.key === "Escape" && !isSaving) {
+        // לא לאפשר בריחה תוך כדי שמירה
         onClose();
       }
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [onClose]);
+  }, [onClose, isSaving]);
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     if (!symbol || !targetId) {
       alert("Please choose an emoji and entity.");
       return;
     }
-    onSave({ symbol, targetId });
-    onClose();
+    setIsSaving(true); // התחלת שמירה
+    await onSave({ symbol, targetId }); // ממתין לסיום השמירה
+    setIsSaving(false); // סיום שמירה
+    onClose(); // רק אז סוגר
   };
 
   return (
@@ -65,6 +69,7 @@ const AddEmojiModal = ({ onClose, onSave, entities }) => {
                     : "border-gray-300"
                 }`}
                 onClick={() => setSymbol(em)}
+                disabled={isSaving}
               >
                 {em}
               </button>
@@ -76,6 +81,7 @@ const AddEmojiModal = ({ onClose, onSave, entities }) => {
             onChange={(e) => setTargetId(e.target.value)}
             className="border border-gray-300 rounded px-3 py-2 focus:ring-2 focus:ring-yellow-400"
             required
+            disabled={isSaving}
           >
             <option value="">Select Entity</option>
             {entities.map((entity) => (
@@ -89,15 +95,21 @@ const AddEmojiModal = ({ onClose, onSave, entities }) => {
             <button
               type="button"
               onClick={onClose}
+              disabled={isSaving}
               className="px-4 py-2 rounded bg-gray-300 hover:bg-gray-400"
             >
               Cancel
             </button>
             <button
               type="submit"
-              className="px-4 py-2 rounded bg-[#9d174d] hover:bg-[#831843] text-white font-semibold"
+              disabled={isSaving}
+              className="px-4 py-2 rounded bg-[#9d174d] hover:bg-[#831843] text-white font-semibold flex items-center justify-center gap-2"
             >
-              Save
+              {isSaving ? (
+                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+              ) : (
+                "Save"
+              )}
             </button>
           </div>
         </form>

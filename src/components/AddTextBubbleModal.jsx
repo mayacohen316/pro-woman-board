@@ -1,20 +1,20 @@
 import React, { useState, useEffect } from "react";
 
-const AddTextBubbleModal = ({ onClose, onSave, entities, isLoading }) => {
+const AddTextBubbleModal = ({ onClose, onSave, entities, isSaving }) => {
   const [text, setText] = useState("");
   const [targetId, setTargetId] = useState("");
 
   useEffect(() => {
     const handleKeyDown = (e) => {
-      if (e.key === "Escape") {
+      if (e.key === "Escape" && !isSaving) {
         onClose();
       }
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [onClose]);
+  }, [onClose, isSaving]);
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
 
     if (!text.trim()) {
@@ -27,7 +27,8 @@ const AddTextBubbleModal = ({ onClose, onSave, entities, isLoading }) => {
       return;
     }
 
-    onSave({ text: text.trim(), targetId });
+    await onSave({ text: text.trim(), targetId }); // ממתין לשמירה מלאה
+    onClose(); // סוגר רק אחרי סיום שמירה ו-fetchData
   };
 
   return (
@@ -45,6 +46,7 @@ const AddTextBubbleModal = ({ onClose, onSave, entities, isLoading }) => {
             onChange={(e) => setText(e.target.value)}
             className="border border-gray-300 rounded px-3 py-2 focus:ring-2 focus:ring-pink-400"
             required
+            disabled={isSaving}
           />
 
           <select
@@ -52,6 +54,7 @@ const AddTextBubbleModal = ({ onClose, onSave, entities, isLoading }) => {
             onChange={(e) => setTargetId(e.target.value)}
             className="border border-gray-300 rounded px-3 py-2 focus:ring-2 focus:ring-pink-400"
             required
+            disabled={isSaving}
           >
             <option value="">Select Entity</option>
             {entities.map((entity) => (
@@ -65,20 +68,21 @@ const AddTextBubbleModal = ({ onClose, onSave, entities, isLoading }) => {
             <button
               type="button"
               onClick={onClose}
+              disabled={isSaving}
               className="px-4 py-2 rounded bg-gray-300 hover:bg-gray-400"
             >
               Cancel
             </button>
             <button
               type="submit"
-              disabled={isLoading} // החסמת כפתור אם יש לודר
+              disabled={isSaving}
               className={`px-4 py-2 rounded ${
-                isLoading
-                  ? "bg-[#9d174d]-300 cursor-not-allowed"
+                isSaving
+                  ? "bg-gray-300 cursor-not-allowed"
                   : "bg-[#9d174d] hover:bg-[#831843] text-white font-semibold"
-              }`}
+              } flex items-center justify-center gap-2`}
             >
-              {isLoading ? (
+              {isSaving ? (
                 <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
               ) : (
                 "Save"

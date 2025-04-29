@@ -7,6 +7,7 @@ import UploadImageModal from "./components/UploadImageModal";
 import AddEmojiModal from "./components/AddEmojiModal";
 import { ReactFlowProvider, useReactFlow } from "reactflow";
 import { useRef } from "react";
+import DeleteConfirmModal from "./components/DeleteConfirmModal";
 
 const App = () => {
   const [entities, setEntities] = useState([]);
@@ -28,26 +29,40 @@ const App = () => {
   const [nodes, setNodes] = useState([]);
   const [edges, setEdges] = useState([]);
   const [isSaving, setIsSaving] = useState(false); // הגדרת הסטייט של isSaving
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [lastCreatedId, setLastCreatedId] = useState(null);
 
   const fetchData = async () => {
     setIsLoading(true);
-    const [
-      { data: entityData },
-      { data: bubbleData },
-      { data: imageData },
-      { data: emojiData },
-    ] = await Promise.all([
-      supabase.from("entities").select("*"),
-      supabase.from("text_bubbles").select("*"),
-      supabase.from("images").select("*"),
-      supabase.from("emojis").select("*"),
-    ]);
+    try {
+      const [
+        { data: entityData, error: entityError },
+        { data: bubbleData, error: bubbleError },
+        { data: imageData, error: imageError },
+        { data: emojiData, error: emojiError },
+      ] = await Promise.all([
+        supabase.from("entities").select("*"),
+        supabase.from("text_bubbles").select("*"),
+        supabase.from("images").select("*"),
+        supabase.from("emojis").select("*"),
+      ]);
 
-    setEntities(entityData || []);
-    setTextBubbles(bubbleData || []);
-    setImages(imageData || []);
-    setEmojis(emojiData || []);
-    setIsLoading(false);
+      if (entityError || bubbleError || imageError || emojiError) {
+        console.error(
+          "❌ Error fetching data:",
+          entityError || bubbleError || imageError || emojiError
+        );
+      }
+
+      setEntities(entityData || []);
+      setTextBubbles(bubbleData || []);
+      setImages(imageData || []);
+      setEmojis(emojiData || []);
+    } catch (error) {
+      console.error("❌ Unexpected fetch error:", error);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   // קריאה ראשונית
@@ -69,8 +84,17 @@ const App = () => {
           address: e.address,
           contribution: e.contribution,
           linkedin: e.linkedin,
-          onDelete: (nodeData) => {
-            setNodeToDelete(nodeData.id);
+          onDelete: () => {
+            setNodeToDelete({
+              id: e.id,
+              type: "entity",
+              data: {
+                label: e.name,
+                address: e.address,
+                contribution: e.contribution,
+                linkedin: e.linkedin,
+              },
+            });
             setShowDeleteModal(true);
           },
         },
@@ -81,12 +105,19 @@ const App = () => {
         position: { x: b.x ?? 0, y: b.y ?? 0 },
         data: {
           label: b.text,
-          onDelete: (nodeData) => {
-            setNodeToDelete(nodeData);
+          onDelete: () => {
+            setNodeToDelete({
+              id: b.id,
+              type: "basic",
+              data: {
+                label: b.text,
+              },
+            });
             setShowDeleteModal(true);
           },
         },
       })),
+
       ...images.map((img) => ({
         id: img.id,
         type: "basic",
@@ -94,20 +125,34 @@ const App = () => {
         data: {
           label: "Image",
           url: img.url,
-          onDelete: (nodeData) => {
-            setNodeToDelete(nodeData);
+          onDelete: () => {
+            setNodeToDelete({
+              id: img.id,
+              type: "basic",
+              data: {
+                label: "Image",
+                url: img.url,
+              },
+            });
             setShowDeleteModal(true);
           },
         },
       })),
+
       ...emojis.map((emo) => ({
         id: emo.id,
         type: "emoji",
         position: { x: emo.x ?? 0, y: emo.y ?? 0 },
         data: {
           label: emo.symbol,
-          onDelete: (nodeData) => {
-            setNodeToDelete(nodeData);
+          onDelete: () => {
+            setNodeToDelete({
+              id: emo.id,
+              type: "emoji",
+              data: {
+                label: emo.symbol,
+              },
+            });
             setShowDeleteModal(true);
           },
         },
@@ -194,328 +239,212 @@ const App = () => {
   };
 
   const handleSaveTextBubble = async (newBubbleData) => {
-    // מגדירים את המיני לודר
-    setIsLoading(true); // הדלקת הלודר
-
-    const newBubble = {
-      text: newBubbleData.text,
-      targetId: newBubbleData.targetId,
-      x: Math.floor(Math.random() * 800),
-      y: Math.floor(Math.random() * 600),
-    };
-
+    setIsSaving(true);
     try {
-      // הכנסה ל-DB
+      const newBubble = {
+        text: newBubbleData.text,
+        targetId: newBubbleData.targetId,
+        x: Math.floor(Math.random() * 800),
+        y: Math.floor(Math.random() * 600),
+      };
+
       const { data, error } = await supabase
         .from("text_bubbles")
         .insert([newBubble])
         .select();
 
       if (error) {
-        console.error(
-          "❌ Error inserting text bubble:",
-          error.message || error
-        );
+        console.error("❌ Error inserting text bubble:", error);
         return;
       }
 
-      console.log("✅ Text bubble added:", data[0]);
-
-      const insertedBubble = data[0];
-
-      // עדכון סטייט הבועות
-      setTextBubbles((prev) => [...prev, insertedBubble]);
-
-      // עדכון הסטייט של nodes (הוספת טקסט לגריד)
-      setNodes((prevNodes) => [
-        ...prevNodes,
-        {
-          id: insertedBubble.id,
-          type: "basic", // סוג הבועה
-          position: { x: insertedBubble.x, y: insertedBubble.y },
-          data: { label: insertedBubble.text },
-        },
-      ]);
-
-      // עדכון הסטייט של edges (יצירת קשר בין הבועה ל-targetId)
-      setEdges((prevEdges) => [
-        ...prevEdges,
-        {
-          id: `edge-${insertedBubble.id}`,
-          source: insertedBubble.id,
-          target: insertedBubble.targetId, // קשר בין הבועה ל-entity
-          sourceHandle: null,
-          targetHandle: null,
-        },
-      ]);
-
-      // עדכון התצוגה (הגריד יתעדכן לפי הצורך)
-      const reactFlow = reactFlowInstance.current;
-      if (reactFlow) {
-        reactFlow.fitView({ padding: 0.2 });
+      if (data && data.length > 0) {
+        setLastCreatedId(data[0].id); // ✅ זום לבועה החדשה
       }
+
+      await fetchData(); // רענון מלא
     } catch (err) {
       console.error("❌ Error saving text bubble:", err);
     } finally {
-      setIsLoading(false); // כיבוי הלודר אחרי שמירה
-      setShowTextBubbleModal(false); // סגירת המודאל אחרי השמירה
+      setIsSaving(false);
+      setShowTextBubbleModal(false);
     }
   };
 
   const handleSaveImage = async (newImageData) => {
-    setIsSaving(true); // הדלקת הלודר
-
-    const newImage = {
-      url: newImageData.url,
-      targetId: newImageData.targetId,
-      x: Math.floor(Math.random() * 800),
-      y: Math.floor(Math.random() * 600),
-    };
-
+    setIsSaving(true);
     try {
+      const newImage = {
+        url: newImageData.url,
+        targetId: newImageData.targetId,
+        x: Math.floor(Math.random() * 800),
+        y: Math.floor(Math.random() * 600),
+      };
+
       const { data, error } = await supabase
         .from("images")
         .insert([newImage])
         .select();
 
       if (error) {
-        console.error("❌ Error inserting image:", error.message || error);
+        console.error("❌ Error inserting image:", error);
         return;
       }
 
-      console.log("✅ Image added:", data[0]);
+      if (data && data.length > 0) {
+        setLastCreatedId(data[0].id); // ✅ זום לאובייקט החדש
+      }
 
-      // הוספת התמונה לסטייט
-      setImages((prevImages) => [...prevImages, data[0]]);
-
-      // המתנה לפני ריפרוש הנתונים
-      setTimeout(() => {
-        // ריפרוש כל הנתונים
-        fetchData(); // מחדש את כל ה-entities, images, bubbles וה-emojis
-      }, 2000); // המתן 2 שניות לפני הריפרוש
-
-      setShowImageModal(false); // סגירת המודל אחרי השמירה
+      await fetchData(); // רענון מלא
     } catch (err) {
       console.error("❌ Error saving image:", err);
     } finally {
-      setIsSaving(false); // כיבוי הלודר
+      setIsSaving(false);
+      setShowImageModal(false);
     }
   };
 
   const handleSaveEmoji = async (newEmojiData) => {
-    setIsLoading(true); // הדלקת לודר
+    setIsSaving(true);
+    try {
+      const newEmoji = {
+        symbol: newEmojiData.symbol,
+        targetId: newEmojiData.targetId,
+        x: Math.floor(Math.random() * 800),
+        y: Math.floor(Math.random() * 600),
+      };
 
-    const newEmoji = {
-      symbol: newEmojiData.symbol,
-      targetId: newEmojiData.targetId,
-      x: Math.floor(Math.random() * 800),
-      y: Math.floor(Math.random() * 600),
-    };
+      const { data, error } = await supabase
+        .from("emojis")
+        .insert([newEmoji])
+        .select();
 
-    const { data, error } = await supabase
-      .from("emojis")
-      .insert([newEmoji])
-      .select();
+      if (error) {
+        console.error("❌ Error inserting emoji:", error);
+        return;
+      }
 
-    if (error) {
-      console.error("❌ Error inserting emoji:", error.message || error);
-      setIsLoading(false); // כיבוי לודר במקרה של טעות
-      return;
+      if (data && data.length > 0) {
+        setLastCreatedId(data[0].id); // ✅ שמירת ה-id לזום
+      }
+
+      await fetchData(); // רענון מלא
+    } catch (err) {
+      console.error("❌ Error saving emoji:", err);
+    } finally {
+      setIsSaving(false);
+      setShowEmojiModal(false);
     }
-
-    console.log("✅ Emoji added:", data[0]);
-
-    const insertedEmoji = data[0];
-
-    // עדכון הסטייט של emojis
-    setEmojis((prev) => [...prev, insertedEmoji]);
-
-    // עדכון הסטייט של nodes כך שהאימוג'י יתווסף לגריד
-    setNodes((prevNodes) => [
-      ...prevNodes,
-      {
-        id: insertedEmoji.id,
-        type: "emoji", // סוג האימוג'י
-        position: { x: insertedEmoji.x, y: insertedEmoji.y },
-        data: { label: insertedEmoji.symbol },
-      },
-    ]);
-
-    // עדכון הסטייט של edges, יצירת קשר אם יש צורך
-    setEdges((prevEdges) => [
-      ...prevEdges,
-      {
-        id: `edge-${insertedEmoji.id}`,
-        source: insertedEmoji.id,
-        target: insertedEmoji.targetId,
-        sourceHandle: null,
-        targetHandle: null,
-      },
-    ]);
-
-    setIsLoading(false); // כיבוי לודר
   };
 
   const handleSaveEntity = async (newEntityData) => {
-    setIsSaving(true); // הדלקת הלודר
-
+    setIsSaving(true);
     try {
-      // שמירה ל-DB
       const { data, error } = await supabase
         .from("entities")
         .insert([newEntityData])
         .select();
-
-      if (error) {
-        console.error("❌ Error inserting entity:", error.message || error);
+      if (data && data[0]) {
+        setLastCreatedId(data[0].id); // 👈 שמירת ה-ID של האובייקט החדש
+      }
+      if (error || !data || data.length === 0) {
+        console.error("❌ Error inserting entity:", error);
         return;
       }
 
-      console.log("✅ Entity added:", data[0]);
+      await fetchData(); // טען מחדש את הנתונים מה-DB
+      setShowAddEntityModal(false);
 
-      // הוספת ה-entity לסטייט
-      setEntities((prev) => [...prev, data[0]]);
-      setNodes((prev) => [
-        ...prev,
-        {
-          id: data[0].id,
-          type: "entity",
-          position: { x: data[0].x, y: data[0].y },
-          data: { label: data[0].name, address: data[0].address },
-        },
-      ]);
-
-      // המתנה לפני ריפרוש הנתונים
+      // 🔍 ביצוע זום לישות שנוספה
+      const newEntity = data[0];
       setTimeout(() => {
-        // ריפרוש כל הנתונים
-        fetchData(); // מחדש את כל ה-entities, images, bubbles וה-emojis
-      }, 2000); // המתן 2 שניות לפני הריפרוש
+        if (window.reactFlowInstance?.setCenter) {
+          window.reactFlowInstance.setCenter(newEntity.x, newEntity.y, {
+            zoom: 1.8,
+            duration: 800,
+          });
+        }
+      }, 300);
     } catch (err) {
       console.error("❌ Error saving entity:", err);
     } finally {
-      setIsSaving(false); // כיבוי הלודר
-      setShowAddEntityModal(false); // סגירת המודל
+      setIsSaving(false);
     }
   };
 
   const handleConfirmDelete = async () => {
-    if (!selectedNodeId) return;
-
-    const nodeToDelete = nodes.find((n) => n.id === selectedNodeId);
     if (!nodeToDelete) return;
 
     setIsDeleting(true);
-    console.log("Deleting node:", nodeToDelete);
 
     try {
-      if (nodeToDelete.type === "entity") {
-        // מחיקת פריטי הקישור: text_bubbles, images, emojis
-        const relatedEdges = edges.filter((e) => e.target === nodeToDelete.id);
-        const relatedIds = relatedEdges.map((e) => e.source);
+      const { id, type, data } = nodeToDelete;
 
-        console.log("Related nodes to delete:", relatedIds);
-
-        // מחיקת הסטייט המקומי לפני מחיקת ה-DB
-        setTextBubbles((prev) =>
-          prev.filter((bub) => !relatedIds.includes(bub.id))
-        );
-        setImages((prev) => prev.filter((img) => !relatedIds.includes(img.id)));
-        setEmojis((prev) => prev.filter((emo) => !relatedIds.includes(emo.id)));
-        setEntities((prev) => prev.filter((ent) => ent.id !== nodeToDelete.id));
-
-        // מחיקת כל הקישורים ב-DB
-        await Promise.all(
-          relatedIds.map(async (id) => {
-            await supabase.from("text_bubbles").delete().eq("id", id);
-            await supabase.from("images").delete().eq("id", id);
-            await supabase.from("emojis").delete().eq("id", id);
-          })
-        );
-
-        // מחיקת ה-entity
-        await supabase.from("entities").delete().eq("id", nodeToDelete.id);
-
-        console.log("Deleted entity from DB:", nodeToDelete.id);
-      } else {
-        // מחיקת פריט רגיל (textBubble, emoji, image)
-        let tableName = "text_bubbles";
-        let setStateFunction = setTextBubbles;
-
-        if (
-          nodeToDelete.type === "basic" &&
-          nodeToDelete.data.label === "Image"
-        ) {
-          tableName = "images";
-          setStateFunction = setImages;
-        } else if (nodeToDelete.type === "emoji") {
-          tableName = "emojis";
-          setStateFunction = setEmojis;
-        }
-
-        await supabase.from(tableName).delete().eq("id", selectedNodeId);
-
-        // מחיקת הסטייט המקומי
-        setStateFunction((prev) =>
-          prev.filter((item) => item.id !== selectedNodeId)
-        );
-        console.log(`Deleted ${tableName} from DB: ${selectedNodeId}`);
+      if (!id || !type) {
+        console.error("❌ Missing id or type on nodeToDelete", nodeToDelete);
+        return;
       }
 
+      let tableName = "";
+
+      if (type === "entity") {
+        tableName = "entities";
+
+        // אם זה Entity - מוחקים גם את כל הילדים
+        await Promise.all([
+          supabase.from("text_bubbles").delete().eq("targetId", id),
+          supabase.from("images").delete().eq("targetId", id),
+          supabase.from("emojis").delete().eq("targetId", id),
+        ]);
+      } else if (type === "basic") {
+        // אם זה basic צריך לבדוק אם זה תמונה או טקסט
+        if (data?.url) {
+          tableName = "images";
+        } else {
+          tableName = "text_bubbles";
+        }
+      } else if (type === "emoji") {
+        tableName = "emojis";
+      } else {
+        console.error("❌ Unknown type:", type);
+        return;
+      }
+
+      if (tableName) {
+        const { error } = await supabase.from(tableName).delete().eq("id", id);
+        if (error) {
+          console.error("❌ Error deleting from", tableName, error);
+        }
+      }
+
+      setLastCreatedId(null);
+      await fetchData();
+
       setShowDeleteModal(false);
-      setSelectedNodeId(null);
-    } catch (error) {
-      console.error("❌ Failed to delete node:", error);
-      alert("Failed to delete everything properly. Try again.");
+      setNodeToDelete(null);
+      setShowDeleteModal(false);
+    } catch (err) {
+      console.error("❌ Error deleting node:", err);
     } finally {
       setIsDeleting(false);
     }
   };
 
   const handleDeleteNode = async (node) => {
-    const idToDelete = node.id;
     let tableName = "";
-    let setStateFunction = null;
 
-    if (node.type === "entity") {
-      tableName = "entities";
-      setStateFunction = setEntities;
-    } else if (node.type === "basic") {
-      if (node.data?.label === "Image") {
-        tableName = "images";
-        setStateFunction = setImages;
-      } else {
-        tableName = "text_bubbles";
-        setStateFunction = setTextBubbles;
-      }
-    } else if (node.type === "emoji") {
-      tableName = "emojis";
-      setStateFunction = setEmojis;
-    }
+    if (node.type === "entity") tableName = "entities";
+    else if (node.type === "basic")
+      tableName = node.data.label === "Image" ? "images" : "text_bubbles";
+    else if (node.type === "emoji") tableName = "emojis";
 
-    if (!tableName || !setStateFunction) {
-      console.error("Unknown node type, cannot delete.");
-      return;
-    }
+    if (!tableName) return console.error("Unknown node type, cannot delete.");
 
     try {
-      const { error } = await supabase
-        .from(tableName)
-        .delete()
-        .eq("id", idToDelete);
-
-      if (error) {
-        console.error("❌ Failed to delete from DB:", error);
-        alert("Failed to delete from database.");
-        return;
-      }
-
-      console.log(`✅ Deleted ${idToDelete} from ${tableName}`);
-
-      // 👇 עכשיו מוחקים גם מהסטייט המקומי!
-      setStateFunction((prev) => prev.filter((item) => item.id !== idToDelete));
+      await supabase.from(tableName).delete().eq("id", node.id);
+      await fetchData(); // רענון אחרי מחיקה
     } catch (err) {
-      console.error("❌ Unexpected error during delete:", err);
-      alert("Unexpected error during delete.");
+      console.error("❌ Error deleting node:", err);
     }
   };
 
@@ -535,8 +464,17 @@ const App = () => {
           address: e.address,
           contribution: e.contribution,
           linkedin: e.linkedin,
-          onDelete: (nodeData) => {
-            setSelectedNodeId(nodeData.id);
+          onDelete: () => {
+            setNodeToDelete({
+              id: e.id,
+              type: "entity",
+              data: {
+                label: e.name,
+                address: e.address,
+                contribution: e.contribution,
+                linkedin: e.linkedin,
+              },
+            });
             setShowDeleteModal(true);
           },
         },
@@ -547,8 +485,14 @@ const App = () => {
         position: { x: b.x ?? 0, y: b.y ?? 0 },
         data: {
           label: b.text,
-          onDelete: (nodeData) => {
-            setSelectedNodeId(nodeData.id);
+          onDelete: () => {
+            setNodeToDelete({
+              id: b.id,
+              type: "basic",
+              data: {
+                label: b.text,
+              },
+            });
             setShowDeleteModal(true);
           },
         },
@@ -560,8 +504,15 @@ const App = () => {
         data: {
           label: "Image",
           url: img.url,
-          onDelete: (nodeData) => {
-            setSelectedNodeId(nodeData.id);
+          onDelete: () => {
+            setNodeToDelete({
+              id: img.id,
+              type: "basic",
+              data: {
+                label: "Image",
+                url: img.url,
+              },
+            });
             setShowDeleteModal(true);
           },
         },
@@ -572,8 +523,14 @@ const App = () => {
         position: { x: emo.x ?? 0, y: emo.y ?? 0 },
         data: {
           label: emo.symbol,
-          onDelete: (nodeData) => {
-            setSelectedNodeId(nodeData.id);
+          onDelete: () => {
+            setNodeToDelete({
+              id: emo.id,
+              type: "emoji",
+              data: {
+                label: emo.symbol,
+              },
+            });
             setShowDeleteModal(true);
           },
         },
@@ -620,6 +577,7 @@ const App = () => {
             <SimpleFlow
               nodes={nodes}
               edges={edges}
+              lastCreatedId={lastCreatedId}
               setTextBubbles={setTextBubbles}
               setImages={setImages}
               setEmojis={setEmojis}
@@ -630,7 +588,10 @@ const App = () => {
 
       <div className="fixed bottom-4 left-1/2 transform -translate-x-1/2 flex gap-2 sm:gap-4">
         <button
-          onClick={() => setShowAddEntityModal(true)}
+          onClick={() => {
+            setIsSaving(false);
+            setShowAddEntityModal(true);
+          }}
           className="bg-[#9d174d] hover:bg-[#831843] text-white px-2 py-2 sm:px-4 sm:py-2 rounded text-xl sm:text-base shadow-md hover:shadow-lg transition"
         >
           ➕<span className="hidden sm:inline"> Add Entity</span>
@@ -659,8 +620,10 @@ const App = () => {
         <AddEntityModal
           onClose={() => setShowAddEntityModal(false)}
           onSave={handleSaveEntity}
+          isSaving={isSaving}
         />
       )}
+
       {showTextBubbleModal && (
         <AddTextBubbleModal
           onClose={() => setShowTextBubbleModal(false)}
@@ -692,7 +655,7 @@ const App = () => {
         <DeleteConfirmModal
           onCancel={() => setShowDeleteModal(false)}
           onConfirm={handleConfirmDelete}
-          isEntity={nodes.find((n) => n.id === nodeToDelete)?.type === "entity"}
+          isEntity={nodeToDelete?.type === "entity"}
           isDeleting={isDeleting}
         />
       )}

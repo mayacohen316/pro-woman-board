@@ -1,7 +1,7 @@
 import { Handle, Position } from "reactflow";
 import { FiTrash2 } from "react-icons/fi";
 
-const BasicNode = ({ data }) => {
+const BasicNode = ({ id, type, data }) => {
   return (
     <div className="relative bg-white border rounded-md shadow-sm p-2 w-40 group">
       <Handle
@@ -14,7 +14,7 @@ const BasicNode = ({ data }) => {
       <button
         onClick={(e) => {
           e.stopPropagation();
-          data.onDelete(data);
+          data.onDelete(id);
         }}
         className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200"
       >
